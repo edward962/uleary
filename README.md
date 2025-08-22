@@ -70,3 +70,4 @@ Aplikacja Vue.js umożliwiająca użytkownikom wgrywanie plików (PDF/DOCX/preze
 ## Licencja
 
 MIT
+
