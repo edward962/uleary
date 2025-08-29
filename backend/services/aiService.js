@@ -1,61 +1,60 @@
-const OpenAI = require("openai");
+const Anthropic = require("@anthropic-ai/sdk");
 
 class AIService {
   constructor() {
-    this.openai = null;
-    this.initializeOpenAI();
+    this.anthropic = null;
+    this.initializeClaude();
   }
 
-  initializeOpenAI() {
-    if (process.env.OPENAI_API_KEY) {
+  initializeClaude() {
+    if (process.env.ANTHROPIC_API_KEY) {
       try {
-        this.openai = new OpenAI({
-          apiKey: process.env.OPENAI_API_KEY,
+        this.anthropic = new Anthropic({
+          apiKey: process.env.ANTHROPIC_API_KEY,
         });
-        console.log("✅ OpenAI API initialized");
+        console.log("✅ Claude (Anthropic) API initialized");
       } catch (error) {
-        console.warn("⚠️ OpenAI initialization failed:", error.message);
-        this.openai = null;
+        console.warn("⚠️ Claude initialization failed:", error.message);
+        this.anthropic = null;
       }
     } else {
-      console.log("ℹ️ OpenAI API key not found, using mock responses");
-      console.log("💡 Set OPENAI_API_KEY environment variable to use real AI");
+      console.log("ℹ️ Claude API key not found, using mock responses");
+      console.log(
+        "💡 Set ANTHROPIC_API_KEY environment variable to use real AI"
+      );
     }
   }
 
   async generateContent(text, processingType) {
-    // If OpenAI is not available, use mock content
-    if (!this.openai) {
-      console.log("Using mock AI content generation");
+    // For testing purposes, let's try Claude first, then fall back to mock
+    if (!this.anthropic) {
+      console.log("Using mock AI content generation - Claude not initialized");
       return this.generateMockContent(text, processingType);
     }
 
     try {
       const prompt = this.buildPrompt(text, processingType);
 
-      console.log(`🤖 Generating ${processingType} with OpenAI GPT-3.5-turbo`);
+      console.log(`🤖 Generating ${processingType} with Claude (Anthropic)`);
 
-      const completion = await this.openai.chat.completions.create({
-        model: "gpt-3.5-turbo",
+      const completion = await this.anthropic.messages.create({
+        model: "claude-3-haiku-20240307",
+        max_tokens: 2000,
+        temperature: 0.7,
+        system:
+          "Jesteś asystentem edukacyjnym specjalizującym się w tworzeniu materiałów do nauki w języku polskim.",
         messages: [
-          {
-            role: "system",
-            content:
-              "Jesteś asystentem edukacyjnym specjalizującym się w tworzeniu materiałów do nauki w języku polskim.",
-          },
           {
             role: "user",
             content: prompt,
           },
         ],
-        max_tokens: 2000,
-        temperature: 0.7,
       });
 
-      const result = completion.choices[0].message.content;
+      const result = completion.content[0].text;
       return this.formatResult(result, processingType);
     } catch (error) {
-      console.error("OpenAI API Error:", error.message);
+      console.error("Claude API Error:", error.message);
       console.log("Falling back to mock content generation");
       return this.generateMockContent(text, processingType);
     }
@@ -312,34 +311,146 @@ WAŻNE: Odpowiedz TYLKO w formacie JSON, bez dodatkowych komentarzy:
     }
   }
 
-  // Check if OpenAI service is healthy
+  // Generate quiz questions on-demand (for interactive quiz)
+  async generateQuizQuestions(text, questionCount = 1) {
+    if (!this.anthropic) {
+      console.log("Using mock quiz questions - Claude not initialized");
+      return this.generateMockQuizQuestions(text, questionCount);
+    }
+
+    try {
+      console.log(
+        `🤖 Generating ${questionCount} quiz question(s) with Claude`
+      );
+
+      const prompt =
+        `Oto materiał do przetworzenia:\n\n${text}\n\n` +
+        `Stwórz ${questionCount} pytań wielokrotnego wyboru na podstawie tego materiału w języku polskim.
+Każde pytanie powinno:
+- Być różne od poprzednich pytań na ten temat
+- Mieć 4 opcje odpowiedzi (A, B, C, D)
+- Mieć tylko jedną prawidłową odpowiedź
+- Sprawdzać zrozumienie materiału
+- Być jasne i precyzyjne
+
+WAŻNE: Odpowiedz TYLKO w formacie JSON, bez dodatkowych komentarzy:
+{
+  "questions": [
+    {
+      "question": "Treść pytania?",
+      "options": {
+        "A": "Opcja A",
+        "B": "Opcja B", 
+        "C": "Opcja C",
+        "D": "Opcja D"
+      },
+      "correctAnswer": "A",
+      "explanation": "Wyjaśnienie dlaczego ta odpowiedź jest prawidłowa"
+    }
+  ]
+}`;
+
+      const completion = await this.anthropic.messages.create({
+        model: "claude-3-haiku-20240307",
+        max_tokens: 1500,
+        temperature: 0.8, // Higher temperature for variety
+        system:
+          "Jesteś asystentem edukacyjnym specjalizującym się w tworzeniu pytań quizowych w języku polskim.",
+        messages: [
+          {
+            role: "user",
+            content: prompt,
+          },
+        ],
+      });
+
+      const result = completion.content[0].text;
+      const parsed = this.parseQuizResponse(result);
+
+      return parsed.questions || [];
+    } catch (error) {
+      console.error("Claude API Error (quiz questions):", error.message);
+      console.log("Falling back to mock quiz questions");
+      return this.generateMockQuizQuestions(text, questionCount);
+    }
+  }
+
+  // Parse quiz response from Claude
+  parseQuizResponse(result) {
+    try {
+      // Clean the response - remove markdown code blocks if present
+      let cleanResult = result;
+      cleanResult = cleanResult.replace(/```json\s*/g, "");
+      cleanResult = cleanResult.replace(/```\s*/g, "");
+
+      // Try to find JSON content between { and }
+      const jsonMatch = cleanResult.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        cleanResult = jsonMatch[0];
+      }
+
+      return JSON.parse(cleanResult);
+    } catch (error) {
+      console.warn(
+        "Failed to parse Claude quiz response as JSON:",
+        error.message
+      );
+      return { questions: [] };
+    }
+  }
+
+  // Generate mock quiz questions for fallback
+  generateMockQuizQuestions(text, questionCount = 1) {
+    const mockQuestions = [];
+
+    for (let i = 0; i < questionCount; i++) {
+      mockQuestions.push({
+        question: `Pytanie ${
+          i + 1
+        } na podstawie materiału - jakie jest główne zagadnienie?`,
+        options: {
+          A: "Pierwsza opcja odpowiedzi",
+          B: "Druga opcja odpowiedzi (prawdopodobnie poprawna)",
+          C: "Trzecia opcja odpowiedzi",
+          D: "Czwarta opcja odpowiedzi",
+        },
+        correctAnswer: "B",
+        explanation:
+          "To jest przykładowe wyjaśnienie na podstawie dostarczonego materiału.",
+      });
+    }
+
+    return mockQuestions;
+  }
+
+  // Check if Claude service is healthy
   async healthCheck() {
     try {
-      if (!this.openai) {
+      if (!this.anthropic) {
         return {
           available: false,
-          service: "OpenAI",
+          service: "Claude (Anthropic)",
           error: "API key not configured",
         };
       }
 
-      // Simple test request to OpenAI
-      const testResponse = await this.openai.chat.completions.create({
-        model: "gpt-3.5-turbo",
-        messages: [{ role: "user", content: "test" }],
+      // Simple test request to Claude
+      const testResponse = await this.anthropic.messages.create({
+        model: "claude-3-haiku-20240307",
         max_tokens: 5,
+        messages: [{ role: "user", content: "test" }],
       });
 
       return {
         available: true,
-        service: "OpenAI",
-        model: "gpt-3.5-turbo",
+        service: "Claude (Anthropic)",
+        model: "claude-3-haiku-20240307",
         status: "healthy",
       };
     } catch (error) {
       return {
         available: false,
-        service: "OpenAI",
+        service: "Claude (Anthropic)",
         error: error.message,
       };
     }

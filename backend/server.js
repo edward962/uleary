@@ -213,6 +213,193 @@ app.post("/api/process-text", async (req, res) => {
   }
 });
 
+// Quiz session management
+const quizSessions = new Map();
+
+// Start a new quiz session
+app.post("/api/start-quiz", async (req, res) => {
+  try {
+    const { text } = req.body;
+
+    if (!text || text.trim().length === 0) {
+      return res.status(400).json({ error: "Brak tekstu do przetworzenia" });
+    }
+
+    const sessionId = `quiz_${Date.now()}_${Math.random()
+      .toString(36)
+      .substring(2, 15)}`;
+
+    console.log(`Starting quiz session: ${sessionId}`);
+
+    // Generate initial batch of 3 questions
+    const initialQuestions = await aiService.generateQuizQuestions(text, 3);
+
+    const session = {
+      id: sessionId,
+      sourceText: text,
+      questions: initialQuestions,
+      score: 0,
+      totalAnswered: 0,
+      startTime: new Date(),
+      isActive: true,
+    };
+
+    quizSessions.set(sessionId, session);
+
+    res.json({
+      success: true,
+      sessionId: sessionId,
+      questions: initialQuestions,
+      totalQuestions: initialQuestions.length,
+      hasMore: true,
+    });
+  } catch (error) {
+    console.error("Error starting quiz:", error);
+    res.status(500).json({
+      error: "Błąd podczas tworzenia quizu",
+      details: error.message,
+    });
+  }
+});
+
+// Get next question for quiz session
+app.post("/api/quiz/:sessionId/next-question", async (req, res) => {
+  try {
+    const { sessionId } = req.params;
+    const session = quizSessions.get(sessionId);
+
+    if (!session || !session.isActive) {
+      return res
+        .status(404)
+        .json({ error: "Sesja quizu nie została znaleziona lub wygasła" });
+    }
+
+    console.log(`Generating next question for session: ${sessionId}`);
+
+    // Generate one new question
+    const newQuestions = await aiService.generateQuizQuestions(
+      session.sourceText,
+      1
+    );
+
+    if (newQuestions && newQuestions.length > 0) {
+      session.questions.push(...newQuestions);
+
+      res.json({
+        success: true,
+        question: newQuestions[0],
+        questionNumber: session.questions.length,
+        hasMore: true,
+      });
+    } else {
+      res.json({
+        success: false,
+        message: "Nie udało się wygenerować nowego pytania",
+        hasMore: false,
+      });
+    }
+  } catch (error) {
+    console.error("Error generating next question:", error);
+    res.status(500).json({
+      error: "Błąd podczas generowania pytania",
+      details: error.message,
+    });
+  }
+});
+
+// Submit answer and get feedback
+app.post("/api/quiz/:sessionId/answer", async (req, res) => {
+  try {
+    const { sessionId } = req.params;
+    const { questionIndex, selectedAnswer } = req.body;
+    const session = quizSessions.get(sessionId);
+
+    if (!session || !session.isActive) {
+      return res
+        .status(404)
+        .json({ error: "Sesja quizu nie została znaleziona" });
+    }
+
+    const question = session.questions[questionIndex];
+    if (!question) {
+      return res.status(400).json({ error: "Pytanie nie zostało znalezione" });
+    }
+
+    const isCorrect = selectedAnswer === question.correctAnswer;
+
+    session.totalAnswered++;
+    if (isCorrect) {
+      session.score++;
+    }
+
+    console.log(
+      `Answer submitted for session ${sessionId}: ${
+        isCorrect ? "Correct" : "Incorrect"
+      }`
+    );
+
+    res.json({
+      success: true,
+      correct: isCorrect,
+      correctAnswer: question.correctAnswer,
+      explanation: question.explanation,
+      score: session.score,
+      totalAnswered: session.totalAnswered,
+      percentage: Math.round((session.score / session.totalAnswered) * 100),
+    });
+  } catch (error) {
+    console.error("Error submitting answer:", error);
+    res.status(500).json({
+      error: "Błąd podczas sprawdzania odpowiedzi",
+      details: error.message,
+    });
+  }
+});
+
+// End quiz session
+app.post("/api/quiz/:sessionId/end", async (req, res) => {
+  try {
+    const { sessionId } = req.params;
+    const session = quizSessions.get(sessionId);
+
+    if (!session) {
+      return res
+        .status(404)
+        .json({ error: "Sesja quizu nie została znaleziona" });
+    }
+
+    session.isActive = false;
+    session.endTime = new Date();
+
+    console.log(`Quiz session ended: ${sessionId}`);
+
+    res.json({
+      success: true,
+      finalResults: {
+        score: session.score,
+        totalAnswered: session.totalAnswered,
+        percentage:
+          session.totalAnswered > 0
+            ? Math.round((session.score / session.totalAnswered) * 100)
+            : 0,
+        duration: Math.round((session.endTime - session.startTime) / 1000), // in seconds
+        questionsGenerated: session.questions.length,
+      },
+    });
+
+    // Clean up session after 1 hour
+    setTimeout(() => {
+      quizSessions.delete(sessionId);
+    }, 3600000);
+  } catch (error) {
+    console.error("Error ending quiz:", error);
+    res.status(500).json({
+      error: "Błąd podczas kończenia quizu",
+      details: error.message,
+    });
+  }
+});
+
 // Download lecture audio
 app.get("/api/download-audio/:sessionId", async (req, res) => {
   try {

@@ -1,0 +1,6 @@
+✅ Claude (Anthropic) API initialized
+🚀 ULeary Backend API is running on port 3001
+🌍 Environment: development
+📚 Health check: http://localhost:3001/health
+✅ ElevenLabs API initialized
+🎤 Available voices: 22
