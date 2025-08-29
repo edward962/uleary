@@ -7,4 +7,13 @@ export default defineConfig({
     port: 3000,
     open: true,
   },
+  build: {
+    outDir: "dist",
+    sourcemap: false,
+    minify: "terser",
+    chunkSizeWarningLimit: 1600,
+  },
+  define: {
+    __VUE_PROD_DEVTOOLS__: false,
+  },
 });
