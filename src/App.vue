@@ -594,7 +594,8 @@
               <div>
                 <span class="text-h5 font-weight-bold">Quiz Interaktywny</span>
                 <div class="text-caption text-grey-600">
-                  Pytanie {{ currentQuestionIndex + 1 }}
+                  Pytanie {{ currentQuestionIndex + 1 }} z
+                  {{ quizSession.maxQuestions || 10 }}
                 </div>
               </div>
             </div>
@@ -708,13 +709,28 @@
 
             <v-btn
               v-if="showFeedback && !quizCompleted"
-              color="primary"
+              :color="
+                quizSession.questionsGenerated >= quizSession.maxQuestions
+                  ? 'orange'
+                  : 'primary'
+              "
               variant="flat"
               @click="nextQuestion"
               :loading="isLoadingNextQuestion"
-              append-icon="mdi-arrow-right"
+              :disabled="
+                quizSession.questionsGenerated >= quizSession.maxQuestions
+              "
+              :append-icon="
+                quizSession.questionsGenerated >= quizSession.maxQuestions
+                  ? 'mdi-stop'
+                  : 'mdi-arrow-right'
+              "
             >
-              Następne pytanie
+              {{
+                quizSession.questionsGenerated >= quizSession.maxQuestions
+                  ? "Limit pytań osiągnięty"
+                  : "Następne pytanie"
+              }}
             </v-btn>
           </v-card-actions>
         </div>
@@ -1996,11 +2012,26 @@ export default {
             this.currentQuestion = result.question;
             this.currentQuestionIndex++;
             this.resetQuestionState();
+
+            // Update session limits
+            if (result.questionsGenerated) {
+              this.quizSession.questionsGenerated = result.questionsGenerated;
+              this.quizSession.maxQuestions = result.maxQuestions;
+              this.quizSession.hasMore = result.hasMore;
+            }
           } else {
-            this.showNotification(
-              "Nie udało się wygenerować nowego pytania",
-              "warning"
-            );
+            // Check if we've reached the maximum
+            if (result.questionsGenerated >= result.maxQuestions) {
+              this.showNotification(
+                `Osiągnięto maksymalną liczbę pytań (${result.maxQuestions}). Kliknij "Zakończ Quiz" aby zobaczyć wyniki.`,
+                "info"
+              );
+            } else {
+              this.showNotification(
+                "Nie udało się wygenerować nowego pytania",
+                "warning"
+              );
+            }
           }
         }
       } catch (error) {

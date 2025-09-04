@@ -489,6 +489,8 @@ app.post("/api/start-quiz", async (req, res) => {
       totalAnswered: 0,
       startTime: new Date(),
       isActive: true,
+      maxQuestions: 10, // Maximum 10 questions per quiz
+      questionsGenerated: initialQuestions.length, // Track total questions generated
     };
 
     quizSessions.set(sessionId, session);
@@ -498,7 +500,9 @@ app.post("/api/start-quiz", async (req, res) => {
       sessionId: sessionId,
       questions: initialQuestions,
       totalQuestions: initialQuestions.length,
-      hasMore: true,
+      maxQuestions: session.maxQuestions,
+      questionsGenerated: session.questionsGenerated,
+      hasMore: session.questionsGenerated < session.maxQuestions,
     });
   } catch (error) {
     console.error("Error starting quiz:", error);
@@ -523,6 +527,17 @@ app.post("/api/quiz/:sessionId/next-question", async (req, res) => {
 
     console.log(`Generating next question for session: ${sessionId}`);
 
+    // Check if we've reached the maximum question limit
+    if (session.questionsGenerated >= session.maxQuestions) {
+      return res.json({
+        success: false,
+        message: `Osiągnięto maksymalną liczbę pytań (${session.maxQuestions})`,
+        hasMore: false,
+        questionsGenerated: session.questionsGenerated,
+        maxQuestions: session.maxQuestions,
+      });
+    }
+
     // Generate one new question
     const newQuestions = await aiService.generateQuizQuestions(
       session.sourceText,
@@ -531,12 +546,15 @@ app.post("/api/quiz/:sessionId/next-question", async (req, res) => {
 
     if (newQuestions && newQuestions.length > 0) {
       session.questions.push(...newQuestions);
+      session.questionsGenerated += newQuestions.length;
 
       res.json({
         success: true,
         question: newQuestions[0],
         questionNumber: session.questions.length,
-        hasMore: true,
+        questionsGenerated: session.questionsGenerated,
+        maxQuestions: session.maxQuestions,
+        hasMore: session.questionsGenerated < session.maxQuestions,
       });
     } else {
       res.json({
