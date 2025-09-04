@@ -1,0 +1,19 @@
+{
+  "name": "uleary-backend-railway",
+  "version": "1.0.0",
+  "description": "ULeary Backend for Railway deployment",
+  "main": "backend/server.js",
+  "scripts": {
+    "start": "cd backend && npm start",
+    "build": "cd backend && npm ci --only=production",
+    "dev": "cd backend && npm run dev"
+  },
+  "dependencies": {},
+  "keywords": [
+    "backend",
+    "api",
+    "railway"
+  ],
+  "author": "",
+  "license": "MIT"
+}
