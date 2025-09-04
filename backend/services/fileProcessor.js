@@ -11,12 +11,19 @@ class FileProcessor {
         case "application/pdf":
           return await this.extractFromPDF(buffer);
 
-        case "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
-        case "application/msword":
+        case "application/vnd.openxmlformats-officedocument.wordprocessingml.document": // .docx
+        case "application/vnd.openxmlformats-officedocument.wordprocessingml.template": // .dotx
+        case "application/msword": // .doc
+        case "application/vnd.ms-word.document.macroEnabled.12": // .docm
+        case "application/vnd.ms-word.template.macroEnabled.12": // .dotm
           return await this.extractFromDOCX(buffer);
 
-        case "application/vnd.openxmlformats-officedocument.presentationml.presentation":
-        case "application/vnd.ms-powerpoint":
+        case "application/vnd.openxmlformats-officedocument.presentationml.presentation": // .pptx
+        case "application/vnd.openxmlformats-officedocument.presentationml.slideshow": // .ppsx
+        case "application/vnd.openxmlformats-officedocument.presentationml.template": // .potx
+        case "application/vnd.ms-powerpoint": // .ppt
+        case "application/vnd.ms-powerpoint.presentation.macroEnabled.12": // .pptm
+        case "application/vnd.ms-powerpoint.slideshow.macroEnabled.12": // .ppsm
           return await this.extractFromPPTX(buffer);
 
         default:
@@ -34,6 +41,40 @@ class FileProcessor {
       return data.text.trim();
     } catch (error) {
       throw new Error(`Błąd podczas czytania PDF: ${error.message}`);
+    }
+  }
+
+  async extractTextFromPages(file, pageNumbers = []) {
+    try {
+      // First extract all text to know the total content
+      const fullText = await this.extractText(file);
+      const pageCount = await this.estimatePageCount(file);
+
+      // If no specific pages requested or single page document, return all text
+      if (!pageNumbers || pageNumbers.length === 0 || pageCount <= 1) {
+        return fullText;
+      }
+
+      // Estimate page breaks based on text length and page count
+      const textLength = fullText.length;
+      const avgPageLength = textLength / pageCount;
+
+      let extractedText = "";
+      for (const pageNum of pageNumbers) {
+        if (pageNum <= pageCount && pageNum > 0) {
+          const startPos = Math.floor((pageNum - 1) * avgPageLength);
+          const endPos = Math.floor(pageNum * avgPageLength);
+          const pageText = fullText.substring(startPos, endPos);
+          extractedText += pageText + "\n\n";
+        }
+      }
+
+      return extractedText.trim();
+    } catch (error) {
+      console.error("Error extracting text from pages:", error);
+      throw new Error(
+        `Błąd podczas wyodrębniania tekstu z wybranych stron: ${error.message}`
+      );
     }
   }
 
@@ -126,10 +167,10 @@ class FileProcessor {
     try {
       const mimeType = file.mimetype;
       const textLength = extractedText.length;
-      
+
       // Average characters per page varies by document type
       let charactersPerPage;
-      
+
       switch (mimeType) {
         case "application/pdf":
           // PDFs typically have more text per page
@@ -150,8 +191,11 @@ class FileProcessor {
       }
 
       // Calculate estimated pages (minimum 1 page)
-      const estimatedPages = Math.max(1, Math.ceil(textLength / charactersPerPage));
-      
+      const estimatedPages = Math.max(
+        1,
+        Math.ceil(textLength / charactersPerPage)
+      );
+
       // Cap at reasonable maximum for demo purposes
       return Math.min(estimatedPages, 50);
     } catch (error) {
@@ -168,7 +212,9 @@ class FileProcessor {
       const fullText = await this.extractText(file);
       return fullText;
     } catch (error) {
-      throw new Error(`Błąd podczas wyodrębniania tekstu ze stron: ${error.message}`);
+      throw new Error(
+        `Błąd podczas wyodrębniania tekstu ze stron: ${error.message}`
+      );
     }
   }
 
@@ -177,17 +223,20 @@ class FileProcessor {
     // In a real implementation, this would generate thumbnail images of pages
     // For now, we'll return mock thumbnails
     try {
-      const pageCount = await this.estimatePageCount(file, await this.extractText(file));
+      const pageCount = await this.estimatePageCount(
+        file,
+        await this.extractText(file)
+      );
       const thumbnails = [];
-      
+
       for (let i = 1; i <= pageCount; i++) {
         thumbnails.push({
           pageNumber: i,
           thumbnailUrl: `/api/thumbnails/${file.originalname}/page-${i}.jpg`, // Mock URL
-          title: `Strona ${i}`
+          title: `Strona ${i}`,
         });
       }
-      
+
       return thumbnails;
     } catch (error) {
       console.error("Error generating thumbnails:", error);
@@ -197,4 +246,3 @@ class FileProcessor {
 }
 
 module.exports = new FileProcessor();
-

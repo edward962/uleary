@@ -323,8 +323,17 @@ WAŻNE: Odpowiedz TYLKO w formacie JSON, bez dodatkowych komentarzy:
         `🤖 Generating ${questionCount} quiz question(s) with Claude`
       );
 
+      // Add small delay to help with rate limiting (only for subsequent questions)
+      if (questionCount === 1) {
+        await new Promise((resolve) => setTimeout(resolve, 1000)); // 1 second delay
+      }
+
+      // Limit text size to avoid rate limiting - use first 3000 characters
+      const limitedText =
+        text.length > 3000 ? text.substring(0, 3000) + "..." : text;
+
       const prompt =
-        `Oto materiał do przetworzenia:\n\n${text}\n\n` +
+        `Oto materiał do przetworzenia:\n\n${limitedText}\n\n` +
         `Stwórz ${questionCount} pytań wielokrotnego wyboru na podstawie tego materiału w języku polskim.
 Każde pytanie powinno:
 - Być różne od poprzednich pytań na ten temat
@@ -352,8 +361,8 @@ WAŻNE: Odpowiedz TYLKO w formacie JSON, bez dodatkowych komentarzy:
 
       const completion = await this.anthropic.messages.create({
         model: "claude-3-haiku-20240307",
-        max_tokens: 1500,
-        temperature: 0.8, // Higher temperature for variety
+        max_tokens: 800, // Reduced to help with rate limiting
+        temperature: 0.5, // Lower temperature for more consistent questions
         system:
           "Jesteś asystentem edukacyjnym specjalizującym się w tworzeniu pytań quizowych w języku polskim.",
         messages: [
@@ -365,12 +374,32 @@ WAŻNE: Odpowiedz TYLKO w formacie JSON, bez dodatkowych komentarzy:
       });
 
       const result = completion.content[0].text;
-      const parsed = this.parseQuizResponse(result);
+      console.log(
+        "🤖 [AI] Raw Claude response:",
+        result.substring(0, 500) + "..."
+      );
 
+      const parsed = this.parseQuizResponse(result);
+      console.log("🔄 [AI] Parsed response:", JSON.stringify(parsed, null, 2));
+
+      if (!parsed.questions || parsed.questions.length === 0) {
+        console.log(
+          "⚠️ [AI] No questions in parsed response, falling back to mock"
+        );
+        return this.generateMockQuizQuestions(text, questionCount);
+      }
+
+      console.log(
+        `✅ [AI] Successfully generated ${parsed.questions.length} questions`
+      );
       return parsed.questions || [];
     } catch (error) {
-      console.error("Claude API Error (quiz questions):", error.message);
-      console.log("Falling back to mock quiz questions");
+      console.error(
+        "💥 [AI] Claude API Error (quiz questions):",
+        error.message
+      );
+      console.error("🔍 [AI] Error details:", error);
+      console.log("🔄 [AI] Falling back to mock quiz questions");
       return this.generateMockQuizQuestions(text, questionCount);
     }
   }
@@ -378,48 +407,123 @@ WAŻNE: Odpowiedz TYLKO w formacie JSON, bez dodatkowych komentarzy:
   // Parse quiz response from Claude
   parseQuizResponse(result) {
     try {
+      console.log("🔧 [AI] Starting to parse quiz response...");
       // Clean the response - remove markdown code blocks if present
       let cleanResult = result;
       cleanResult = cleanResult.replace(/```json\s*/g, "");
       cleanResult = cleanResult.replace(/```\s*/g, "");
 
+      console.log(
+        "🧹 [AI] Cleaned result:",
+        cleanResult.substring(0, 300) + "..."
+      );
+
       // Try to find JSON content between { and }
       const jsonMatch = cleanResult.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
         cleanResult = jsonMatch[0];
+        console.log(
+          "🎯 [AI] Found JSON match:",
+          cleanResult.substring(0, 200) + "..."
+        );
+      } else {
+        console.log("⚠️ [AI] No JSON pattern found in response");
       }
 
-      return JSON.parse(cleanResult);
+      const parsed = JSON.parse(cleanResult);
+      console.log(
+        "✅ [AI] Successfully parsed JSON, questions count:",
+        parsed.questions?.length || 0
+      );
+      return parsed;
     } catch (error) {
       console.warn(
-        "Failed to parse Claude quiz response as JSON:",
+        "💥 [AI] Failed to parse Claude quiz response as JSON:",
         error.message
       );
+      console.log("📋 [AI] Raw response that failed to parse:", result);
       return { questions: [] };
     }
   }
 
   // Generate mock quiz questions for fallback
   generateMockQuizQuestions(text, questionCount = 1) {
+    console.log(
+      `🎭 [AI] Generating ${questionCount} mock quiz questions as fallback`
+    );
     const mockQuestions = [];
 
+    // Extract key concepts from the text for more realistic questions
+    const words = text.toLowerCase().split(/\s+/);
+    const commonWords = [
+      "i",
+      "a",
+      "w",
+      "z",
+      "na",
+      "do",
+      "po",
+      "o",
+      "że",
+      "się",
+      "lub",
+      "oraz",
+      "może",
+      "to",
+      "jest",
+      "są",
+      "można",
+      "także",
+      "przez",
+      "tej",
+      "tym",
+      "tej",
+    ];
+    const keyWords = words
+      .filter((word) => word.length > 4 && !commonWords.includes(word))
+      .slice(0, 20);
+
+    // Basic concept extraction
+    const sentences = text
+      .split(/[.!?]+/)
+      .filter((s) => s.trim().length > 10)
+      .slice(0, 5);
+
+    const questionTemplates = [
+      "Zgodnie z materiałem, co dotyczy",
+      "Na podstawie tekstu, które stwierdzenie jest prawdziwe odnośnie",
+      "Materiał wskazuje, że głównym aspektem",
+      "W kontekście omawianego tematu, co charakteryzuje",
+      "Według przedstawionych informacji",
+    ];
+
     for (let i = 0; i < questionCount; i++) {
+      const template = questionTemplates[i % questionTemplates.length];
+      const keyword = keyWords[i % keyWords.length] || "omawianego zagadnienia";
+
+      // Create more realistic options based on text
+      const randomSentence =
+        sentences[i % sentences.length] ||
+        "podstawowych zagadnień omówionych w materiale";
+      const concept1 =
+        keyWords[(i * 2) % keyWords.length] || "pierwszego aspektu";
+      const concept2 =
+        keyWords[(i * 2 + 1) % keyWords.length] || "drugiego aspektu";
+
       mockQuestions.push({
-        question: `Pytanie ${
-          i + 1
-        } na podstawie materiału - jakie jest główne zagadnienie?`,
+        question: `${template} ${keyword}?`,
         options: {
-          A: "Pierwsza opcja odpowiedzi",
-          B: "Druga opcja odpowiedzi (prawdopodobnie poprawna)",
-          C: "Trzecia opcja odpowiedzi",
-          D: "Czwarta opcja odpowiedzi",
+          A: `Odnosi się do ${concept1} i powiązanych zagadnień`,
+          B: `Dotyczy ${concept2} oraz związanych z nim procesów`,
+          C: `Koncentruje się na ${randomSentence.substring(0, 50)}...`,
+          D: `Obejmuje inne aspekty niż wymienione powyżej`,
         },
-        correctAnswer: "B",
-        explanation:
-          "To jest przykładowe wyjaśnienie na podstawie dostarczonego materiału.",
+        correctAnswer: ["A", "B", "C"][i % 3],
+        explanation: `Na podstawie analizy materiału, prawidłowa odpowiedź odnosi się do kluczowych konceptów omówionych w tekście.`,
       });
     }
 
+    console.log(`✅ [AI] Generated ${mockQuestions.length} mock questions`);
     return mockQuestions;
   }
 

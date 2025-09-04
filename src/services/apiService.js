@@ -99,6 +99,46 @@ class ApiService {
     }
   }
 
+  // Process file for quiz with page selection
+  async processFileForQuiz(file, pageNumbers = []) {
+    try {
+      console.log("🚀 API: Starting processFileForQuiz");
+      console.log("📁 File:", file.name, "Size:", file.size);
+      console.log("📄 Page numbers:", pageNumbers);
+
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("pageNumbers", JSON.stringify(pageNumbers));
+
+      console.log("📤 Sending POST request to /api/process-file-quiz");
+
+      const response = await this.api.post("/api/process-file-quiz", formData, {
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
+        timeout: 120000, // 2 minute timeout
+        onUploadProgress: (progressEvent) => {
+          const progress = Math.round(
+            (progressEvent.loaded * 100) / progressEvent.total
+          );
+          console.log(`📊 Quiz upload progress: ${progress}%`);
+        },
+      });
+
+      console.log("✅ API: Response received:", response.status);
+      console.log("📋 Response data:", response.data);
+      return response.data;
+    } catch (error) {
+      console.error("💥 API Error in processFileForQuiz:", error);
+      console.error("🔍 Error details:", {
+        message: error.message,
+        status: error.response?.status,
+        data: error.response?.data,
+      });
+      throw error;
+    }
+  }
+
   // Process text input
   async processText(text, processingType) {
     try {

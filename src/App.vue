@@ -159,7 +159,7 @@
             <div v-if="selectedOption === 'upload'">
               <v-file-input
                 v-model="uploadedFiles"
-                accept=".pdf,.docx,.pptx,.doc,.ppt"
+                accept=".pdf,.docx,.doc,.dotx,.docm,.dotm,.pptx,.ppt,.ppsx,.potx,.pptm,.ppsm"
                 label="Wybierz plik"
                 placeholder="Kliknij aby wybrać plik"
                 prepend-icon="mdi-paperclip"
@@ -1199,6 +1199,119 @@
         </v-card-actions>
       </v-card>
     </v-dialog>
+
+    <!-- Quiz Page Selection Dialog -->
+    <v-dialog
+      v-model="showQuizPageSelectionDialog"
+      max-width="800"
+      persistent
+      scrollable
+    >
+      <v-card rounded="xl">
+        <v-card-title class="d-flex align-center pa-6">
+          <v-icon size="32" color="primary" class="mr-3"
+            >mdi-help-circle</v-icon
+          >
+          <div>
+            <span class="text-h5 font-weight-bold"
+              >Wybierz strony dla quizu</span
+            >
+            <div class="text-caption text-grey-600">
+              {{ currentQuizFile ? currentQuizFile.name : "" }} ({{
+                quizFilePageCount
+              }}
+              stron)
+            </div>
+          </div>
+        </v-card-title>
+
+        <v-divider></v-divider>
+
+        <v-card-text class="pa-6">
+          <v-alert type="info" variant="tonal" class="mb-4">
+            <v-icon class="mr-2">mdi-information</v-icon>
+            Wybierz od 1 do 5 stron z dokumentu. Quiz zostanie wygenerowany na
+            podstawie treści z wybranych stron.
+          </v-alert>
+
+          <div class="text-subtitle-2 mb-3">
+            Wybrane strony: {{ quizSelectedPages.length }}/5
+          </div>
+
+          <v-row dense>
+            <v-col
+              v-for="pageNum in quizFilePageCount"
+              :key="pageNum"
+              cols="6"
+              sm="4"
+              md="3"
+            >
+              <v-card
+                :color="
+                  quizSelectedPages.includes(pageNum) ? 'primary' : 'default'
+                "
+                :variant="
+                  quizSelectedPages.includes(pageNum) ? 'flat' : 'outlined'
+                "
+                class="text-center cursor-pointer"
+                @click="toggleQuizPageSelection(pageNum)"
+                hover
+              >
+                <v-card-text class="pa-3">
+                  <v-icon
+                    v-if="quizSelectedPages.includes(pageNum)"
+                    color="white"
+                    class="mb-1"
+                  >
+                    mdi-check-circle
+                  </v-icon>
+                  <v-icon v-else class="mb-1">
+                    mdi-file-document-outline
+                  </v-icon>
+                  <div class="text-body-2 font-weight-medium">
+                    Strona {{ pageNum }}
+                  </div>
+                </v-card-text>
+              </v-card>
+            </v-col>
+          </v-row>
+
+          <v-alert
+            v-if="quizSelectedPages.length === 0"
+            type="warning"
+            variant="tonal"
+            class="mt-4"
+          >
+            Wybierz przynajmniej jedną stronę aby kontynuować.
+          </v-alert>
+        </v-card-text>
+
+        <v-divider></v-divider>
+
+        <v-card-actions class="pa-6">
+          <v-btn
+            variant="outlined"
+            @click="closeQuizPageSelectionDialog"
+            :disabled="isProcessing"
+          >
+            Anuluj
+          </v-btn>
+
+          <v-spacer></v-spacer>
+
+          <v-btn
+            color="primary"
+            variant="flat"
+            @click="generateQuizFromSelectedPages"
+            :disabled="quizSelectedPages.length === 0"
+            :loading="isProcessing"
+            prepend-icon="mdi-help-circle"
+          >
+            Wygeneruj quiz ({{ quizSelectedPages.length }} stron)
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
   </v-app>
 </template>
 
@@ -1252,6 +1365,12 @@ export default {
       isGeneratingSummary: false,
       currentSummary: null,
       summaryMode: "view", // 'select', 'generating', 'view'
+
+      // Quiz page selection system
+      showQuizPageSelectionDialog: false,
+      quizSelectedPages: [],
+      currentQuizFile: null,
+      quizFilePageCount: 0,
 
       // ElevenLabs Testing
       showElevenLabsTest: false,
@@ -1481,6 +1600,93 @@ export default {
       this.showPageSelectionDialog = false;
       this.selectedPages = [];
       this.currentMaterial = null;
+    },
+
+    // Quiz Page Selection Methods
+    showQuizPageSelection(file, pageCount) {
+      this.currentQuizFile = file;
+      this.quizFilePageCount = pageCount;
+      this.quizSelectedPages = [];
+      this.showQuizPageSelectionDialog = true;
+    },
+    toggleQuizPageSelection(pageNumber) {
+      const index = this.quizSelectedPages.indexOf(pageNumber);
+      if (index === -1) {
+        if (this.quizSelectedPages.length < 5) {
+          this.quizSelectedPages.push(pageNumber);
+        } else {
+          this.showNotification(
+            "Możesz wybrać maksymalnie 5 stron dla quizu",
+            "warning"
+          );
+        }
+      } else {
+        this.quizSelectedPages.splice(index, 1);
+      }
+    },
+    async generateQuizFromSelectedPages() {
+      if (this.quizSelectedPages.length === 0) {
+        this.showNotification("Wybierz przynajmniej jedną stronę", "warning");
+        return;
+      }
+
+      console.log(
+        "🎯 Starting quiz generation from selected pages:",
+        this.quizSelectedPages
+      );
+      this.isProcessing = true;
+      this.showQuizPageSelectionDialog = false;
+
+      try {
+        console.log("📁 Sending file to API:", this.currentQuizFile.name);
+        console.log("📄 Selected pages:", this.quizSelectedPages);
+
+        const result = await apiService.processFileForQuiz(
+          this.currentQuizFile,
+          this.quizSelectedPages
+        );
+
+        console.log("✅ API response received:", result);
+
+        if (result && result.success) {
+          console.log("🎮 Starting interactive quiz...");
+          // Start interactive quiz with the generated questions
+          const contentInfo = `Plik: ${
+            this.currentQuizFile.name
+          } (strony: ${this.quizSelectedPages.join(", ")})`;
+          await this.startInteractiveQuiz(result, contentInfo);
+
+          console.log("🎉 Quiz started successfully");
+          this.showNotification(
+            `Quiz rozpoczęty z materiału: ${this.currentQuizFile.name}`,
+            "success"
+          );
+        } else {
+          console.error("❌ API returned unsuccessful result:", result);
+          this.showNotification(
+            "Błąd: Nie udało się wygenerować quizu",
+            "error"
+          );
+        }
+      } catch (error) {
+        console.error("💥 Error generating quiz from pages:", error);
+        this.showNotification(
+          `Błąd podczas generowania quizu: ${error.message}`,
+          "error"
+        );
+      } finally {
+        console.log("🧹 Cleaning up quiz generation state");
+        this.isProcessing = false;
+        this.currentQuizFile = null;
+        this.quizFilePageCount = 0;
+        this.quizSelectedPages = [];
+      }
+    },
+    closeQuizPageSelectionDialog() {
+      this.showQuizPageSelectionDialog = false;
+      this.quizSelectedPages = [];
+      this.currentQuizFile = null;
+      this.quizFilePageCount = 0;
     },
 
     // File Upload Methods
@@ -1745,7 +1951,16 @@ export default {
     // Original Methods (updated to support new upload flow)
     selectOption(option) {
       this.selectedOption = option;
-      this.resetContent();
+
+      // Only clear content when switching between different content types
+      if (option === "upload") {
+        this.pastedText = ""; // Clear text when switching to upload
+      } else if (option === "paste") {
+        this.uploadedFiles = null; // Clear files when switching to paste
+      }
+
+      // Always reset processing type to allow new selection
+      this.selectedProcessing = null;
     },
     resetContent() {
       this.uploadedFiles = null;
@@ -1784,21 +1999,28 @@ export default {
             return; // Exit early, uploadNewMaterial handles UI transitions
           }
 
-          // Handle quiz differently - extract text first then start interactive quiz
+          // Handle quiz differently - check file size and show page selection if needed
           if (this.selectedProcessing === "quiz") {
-            // For now, we'll use the regular API to extract text, then start quiz
-            // In a full implementation, you'd want a dedicated file text extraction endpoint
-            result = await apiService.processFile(file, "summary");
-            if (
-              result &&
-              result.success &&
-              result.result &&
-              result.result.data
-            ) {
-              // Extract the source text and start interactive quiz
-              const sourceText = `${result.result.data.title}\n\n${result.result.data.summary}`;
-              this.sourceText = sourceText; // Store for regeneration
-              result = await apiService.startQuiz(sourceText);
+            // First, upload the file to get page count
+            const uploadResult = await apiService.uploadMaterial(file);
+            if (uploadResult.success) {
+              const material = uploadResult.material;
+
+              if (material.pageCount > 5) {
+                // Show page selection for large documents
+                this.showQuizPageSelection(file, material.pageCount);
+                return; // Exit early, page selection will handle quiz generation
+              } else {
+                // Small document - generate quiz from all pages
+                result = await apiService.processFileForQuiz(file, []);
+
+                if (result && result.success) {
+                  // Start interactive quiz with the generated questions
+                  const contentInfo = `Plik: ${file.name} (wszystkie strony)`;
+                  await this.startInteractiveQuiz(result, contentInfo);
+                  return; // Exit early, quiz started
+                }
+              }
             }
           } else {
             result = await apiService.processFile(

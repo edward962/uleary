@@ -456,6 +456,113 @@ app.post("/api/process-text", async (req, res) => {
   }
 });
 
+// Process file for quiz with page selection
+app.post("/api/process-file-quiz", upload.single("file"), async (req, res) => {
+  try {
+    console.log("🎯 [QUIZ API] Starting quiz file processing");
+    const { pageNumbers } = req.body;
+    const file = req.file;
+
+    if (!file) {
+      console.log("❌ [QUIZ API] No file provided");
+      return res.status(400).json({ error: "Brak pliku do przetworzenia" });
+    }
+
+    console.log(
+      `📁 [QUIZ API] Processing file for quiz: ${file.originalname}, pages: ${
+        pageNumbers || "all"
+      }`
+    );
+    console.log(`📊 [QUIZ API] File size: ${file.size} bytes`);
+
+    let extractedText;
+    if (pageNumbers && pageNumbers.length > 0) {
+      console.log("📄 [QUIZ API] Processing specific pages...");
+      // Parse page numbers from string array to number array
+      const pages = JSON.parse(pageNumbers).map((p) => parseInt(p));
+      console.log(`🔢 [QUIZ API] Parsed pages: ${pages.join(", ")}`);
+
+      console.log("⏳ [QUIZ API] Extracting text from selected pages...");
+      extractedText = await fileProcessor.extractTextFromPages(file, pages);
+      console.log(
+        `✅ [QUIZ API] Extracted text from pages ${pages.join(", ")}: ${
+          extractedText.length
+        } characters`
+      );
+    } else {
+      console.log("📄 [QUIZ API] Processing all pages...");
+      extractedText = await fileProcessor.extractText(file);
+      console.log(
+        `✅ [QUIZ API] Extracted all text: ${extractedText.length} characters`
+      );
+    }
+
+    if (!extractedText || extractedText.trim().length === 0) {
+      console.log("❌ [QUIZ API] No text extracted from file");
+      return res.status(400).json({
+        error: "Nie udało się wyodrębnić tekstu z wybranych stron",
+      });
+    }
+
+    // Start quiz session with extracted text
+    const sessionId = `quiz_${Date.now()}_${Math.random()
+      .toString(36)
+      .substring(2, 15)}`;
+
+    console.log(`🎮 [QUIZ API] Starting quiz session: ${sessionId}`);
+
+    // Generate initial batch of 3 questions
+    console.log("🤖 [QUIZ API] Generating initial quiz questions...");
+    const initialQuestions = await aiService.generateQuizQuestions(
+      extractedText,
+      3
+    );
+    console.log(`✅ [QUIZ API] Generated ${initialQuestions.length} questions`);
+
+    const session = {
+      id: sessionId,
+      sourceText: extractedText,
+      questions: initialQuestions,
+      score: 0,
+      totalAnswered: 0,
+      startTime: new Date(),
+      isActive: true,
+      maxQuestions: 10,
+      questionsGenerated: initialQuestions.length,
+      sourceInfo: {
+        fileName: file.originalname,
+        pages: pageNumbers ? JSON.parse(pageNumbers) : "all",
+      },
+    };
+
+    quizSessions.set(sessionId, session);
+    console.log(`✅ [QUIZ API] Quiz session created and stored: ${sessionId}`);
+
+    const response = {
+      success: true,
+      sessionId: sessionId,
+      questions: initialQuestions,
+      totalQuestions: initialQuestions.length,
+      maxQuestions: session.maxQuestions,
+      questionsGenerated: session.questionsGenerated,
+      hasMore: session.questionsGenerated < session.maxQuestions,
+      sourceInfo: session.sourceInfo,
+    };
+
+    console.log(
+      `🚀 [QUIZ API] Sending response with ${initialQuestions.length} questions`
+    );
+    res.json(response);
+  } catch (error) {
+    console.error("💥 [QUIZ API] Error processing file for quiz:", error);
+    console.error("🔍 [QUIZ API] Error stack:", error.stack);
+    res.status(500).json({
+      error: "Błąd podczas przetwarzania pliku",
+      details: error.message,
+    });
+  }
+});
+
 // Quiz session management
 const quizSessions = new Map();
 
