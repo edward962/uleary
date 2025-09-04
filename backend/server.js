@@ -871,15 +871,17 @@ app.get("/api/elevenlabs/test", async (req, res) => {
 });
 
 app.post("/api/elevenlabs/test-speech", async (req, res) => {
-  try {
-    const { text = "Hello world", voiceId } = req.body;
+  // Declare variables outside try-catch for proper scope
+  const { text = "Hello world", voiceId } = req.body;
+  const originalVoiceId = elevenLabsService.defaultVoiceId;
 
+  try {
     // Temporarily change voice if specified
-    const originalVoiceId = elevenLabsService.defaultVoiceId;
     if (voiceId) {
       elevenLabsService.setVoiceId(voiceId);
     }
 
+    console.log("🧪 Testing ElevenLabs speech generation...");
     console.log(
       `🧪 Testing ElevenLabs with text: "${text.substring(0, 50)}..."`
     );
