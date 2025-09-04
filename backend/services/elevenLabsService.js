@@ -5,7 +5,7 @@ class ElevenLabsService {
     this.apiKey = process.env.ELEVENLABS_API_KEY;
     this.baseUrl = "https://api.elevenlabs.io/v1";
     this.defaultVoiceId =
-      process.env.ELEVENLABS_VOICE_ID || "21m00Tcm4TlvDq8ikWAM"; // Rachel voice
+      process.env.ELEVENLABS_VOICE_ID || "pNInz6obpgDQGcFmaJgB"; // Adam voice (more basic)
     this.isAvailable = false;
     this.initializeElevenLabs();
   }
@@ -39,6 +39,49 @@ class ElevenLabsService {
     }
   }
 
+  async getVoices() {
+    if (!this.isAvailable) {
+      throw new Error("ElevenLabs service is not available");
+    }
+
+    try {
+      const response = await axios.get(`${this.baseUrl}/voices`, {
+        headers: {
+          "xi-api-key": this.apiKey,
+        },
+        timeout: 10000,
+      });
+
+      if (response.status === 200 && response.data.voices) {
+        return {
+          success: true,
+          voices: response.data.voices.map((voice) => ({
+            voice_id: voice.voice_id,
+            name: voice.name,
+            category: voice.category,
+            description: voice.description,
+            labels: voice.labels,
+            preview_url: voice.preview_url,
+            accent: voice.labels?.accent || "Unknown",
+            age: voice.labels?.age || "Unknown",
+            gender: voice.labels?.gender || "Unknown",
+            use_case: voice.labels?.use_case || "Unknown",
+          })),
+        };
+      }
+
+      throw new Error("Invalid response from ElevenLabs voices API");
+    } catch (error) {
+      console.error("Error fetching voices:", error.message);
+      throw new Error(`Failed to fetch voices: ${error.message}`);
+    }
+  }
+
+  setVoiceId(voiceId) {
+    console.log(`🎤 Changing voice from ${this.defaultVoiceId} to ${voiceId}`);
+    this.defaultVoiceId = voiceId;
+  }
+
   async generateSpeech(text, voiceSettings = null) {
     if (!this.isAvailable) {
       throw new Error("ElevenLabs service is not available");
@@ -46,23 +89,32 @@ class ElevenLabsService {
 
     try {
       console.log(`🎤 Generating speech with ElevenLabs...`);
+      console.log(`🔍 Using voice ID: ${this.defaultVoiceId}`);
+      console.log(
+        `🔍 API URL: ${this.baseUrl}/text-to-speech/${this.defaultVoiceId}`
+      );
+      console.log(
+        `🔍 API Key preview: ${
+          this.apiKey ? this.apiKey.substring(0, 8) + "..." : "NOT SET"
+        }`
+      );
 
-      const defaultSettings = {
-        stability: 0.5,
-        similarity_boost: 0.75,
-        style: 0.0,
-        use_speaker_boost: true,
+      // Use multilingual model for Polish support
+      const payload = {
+        text: text,
+        model_id: "eleven_multilingual_v2", // Multilingual model supports Polish
+        voice_settings: voiceSettings || {
+          stability: 0.5,
+          similarity_boost: 0.5,
+          style: 0.5,
+        },
       };
 
-      const settings = voiceSettings || defaultSettings;
+      console.log(`🔍 Request payload:`, JSON.stringify(payload, null, 2));
 
       const response = await axios.post(
         `${this.baseUrl}/text-to-speech/${this.defaultVoiceId}`,
-        {
-          text: text,
-          model_id: "eleven_multilingual_v2",
-          voice_settings: settings,
-        },
+        payload,
         {
           headers: {
             "xi-api-key": this.apiKey,
@@ -70,9 +122,12 @@ class ElevenLabsService {
             Accept: "audio/mpeg",
           },
           responseType: "arraybuffer",
-          timeout: 60000, // 1 minute timeout for audio generation
+          timeout: 30000, // Shorter timeout for testing
         }
       );
+
+      console.log(`🎤 ElevenLabs response status: ${response.status}`);
+      console.log(`🎤 Response headers:`, response.headers);
 
       if (response.status === 200) {
         return {
@@ -84,8 +139,19 @@ class ElevenLabsService {
         throw new Error(`ElevenLabs API returned status: ${response.status}`);
       }
     } catch (error) {
-      console.error("ElevenLabs API Error:", error.message);
-      throw new Error(`Błąd generowania mowy: ${error.message}`);
+      console.error("🚨 ElevenLabs API Error Details:");
+      console.error("- Message:", error.message);
+      console.error("- Status:", error.response?.status);
+      console.error("- Status Text:", error.response?.statusText);
+      console.error("- Response Data:", error.response?.data);
+      console.error("- Request URL:", error.config?.url);
+      console.error("- Request Headers:", error.config?.headers);
+
+      throw new Error(
+        `Błąd generowania mowy: ${error.response?.status || error.message} - ${
+          error.response?.statusText || "Unknown error"
+        }`
+      );
     }
   }
 
@@ -218,4 +284,3 @@ class ElevenLabsService {
 }
 
 module.exports = new ElevenLabsService();
-

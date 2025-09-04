@@ -2,6 +2,7 @@ const express = require("express");
 const cors = require("cors");
 const multer = require("multer");
 const path = require("path");
+const axios = require("axios");
 require("dotenv").config();
 
 const aiService = require("./services/aiService");
@@ -123,7 +124,10 @@ app.post("/api/upload-material", upload.single("file"), async (req, res) => {
 
     // Extract text and get page count
     const extractedText = await fileProcessor.extractText(file);
-    const pageCount = await fileProcessor.estimatePageCount(file, extractedText);
+    const pageCount = await fileProcessor.estimatePageCount(
+      file,
+      extractedText
+    );
 
     if (!extractedText || extractedText.trim().length === 0) {
       return res
@@ -132,7 +136,9 @@ app.post("/api/upload-material", upload.single("file"), async (req, res) => {
     }
 
     // Create material entry
-    const materialId = `material_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`;
+    const materialId = `material_${Date.now()}_${Math.random()
+      .toString(36)
+      .substring(2, 15)}`;
     const material = {
       id: materialId,
       name: file.originalname,
@@ -144,7 +150,7 @@ app.post("/api/upload-material", upload.single("file"), async (req, res) => {
       fullText: extractedText,
       hasQuiz: false,
       hasSummary: false,
-      hasLecture: false
+      hasLecture: false,
     };
 
     materials.set(materialId, material);
@@ -156,8 +162,8 @@ app.post("/api/upload-material", upload.single("file"), async (req, res) => {
         name: material.name,
         pageCount: material.pageCount,
         uploadDate: material.uploadDate,
-        size: material.size
-      }
+        size: material.size,
+      },
     });
   } catch (error) {
     console.error("Error uploading material:", error);
@@ -171,7 +177,7 @@ app.post("/api/upload-material", upload.single("file"), async (req, res) => {
 // Get materials list
 app.get("/api/materials", async (req, res) => {
   try {
-    const materialsList = Array.from(materials.values()).map(material => ({
+    const materialsList = Array.from(materials.values()).map((material) => ({
       id: material.id,
       name: material.name,
       pageCount: material.pageCount,
@@ -179,12 +185,12 @@ app.get("/api/materials", async (req, res) => {
       size: material.size,
       hasQuiz: material.hasQuiz,
       hasSummary: material.hasSummary,
-      hasLecture: material.hasLecture
+      hasLecture: material.hasLecture,
     }));
 
     res.json({
       success: true,
-      materials: materialsList
+      materials: materialsList,
     });
   } catch (error) {
     console.error("Error getting materials:", error);
@@ -212,7 +218,7 @@ app.post("/api/materials/:materialId/summary", async (req, res) => {
       return res.json({
         success: true,
         summary: existingSummary,
-        isExisting: true
+        isExisting: true,
       });
     }
 
@@ -221,7 +227,7 @@ app.post("/api/materials/:materialId/summary", async (req, res) => {
     // Determine text to summarize based on page selection
     let textToSummarize = material.fullText;
     let pageRange = "wszystkie strony";
-    
+
     if (selectedPages && selectedPages.length > 0) {
       // In a real implementation, you'd extract specific pages
       // For now, we'll use the full text but note the selected pages
@@ -232,22 +238,27 @@ app.post("/api/materials/:materialId/summary", async (req, res) => {
     }
 
     // Generate summary
-    const summaryResult = await aiService.generateContent(textToSummarize, "summary");
-    
+    const summaryResult = await aiService.generateContent(
+      textToSummarize,
+      "summary"
+    );
+
     if (summaryResult && summaryResult.data) {
       // Store summary
       const summary = {
-        id: `summary_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`,
+        id: `summary_${Date.now()}_${Math.random()
+          .toString(36)
+          .substring(2, 15)}`,
         materialId: materialId,
         materialName: material.name,
         pageRange: pageRange,
         content: summaryResult.data,
         createdDate: new Date(),
-        selectedPages: selectedPages || []
+        selectedPages: selectedPages || [],
       };
 
       summaries.set(materialId, summary);
-      
+
       // Update material to indicate it has a summary
       material.hasSummary = true;
       materials.set(materialId, material);
@@ -255,11 +266,11 @@ app.post("/api/materials/:materialId/summary", async (req, res) => {
       res.json({
         success: true,
         summary: summary,
-        isExisting: false
+        isExisting: false,
       });
     } else {
       res.status(500).json({
-        error: "Nie udało się wygenerować podsumowania"
+        error: "Nie udało się wygenerować podsumowania",
       });
     }
   } catch (error) {
@@ -278,12 +289,14 @@ app.get("/api/materials/:materialId/summary", async (req, res) => {
 
     const summary = summaries.get(materialId);
     if (!summary) {
-      return res.status(404).json({ error: "Podsumowanie nie zostało znalezione" });
+      return res
+        .status(404)
+        .json({ error: "Podsumowanie nie zostało znalezione" });
     }
 
     res.json({
       success: true,
-      summary: summary
+      summary: summary,
     });
   } catch (error) {
     console.error("Error getting summary:", error);
@@ -301,11 +314,13 @@ app.delete("/api/materials/:materialId/summary", async (req, res) => {
 
     const summary = summaries.get(materialId);
     if (!summary) {
-      return res.status(404).json({ error: "Podsumowanie nie zostało znalezione" });
+      return res
+        .status(404)
+        .json({ error: "Podsumowanie nie zostało znalezione" });
     }
 
     summaries.delete(materialId);
-    
+
     // Update material to indicate it no longer has a summary
     const material = materials.get(materialId);
     if (material) {
@@ -315,7 +330,7 @@ app.delete("/api/materials/:materialId/summary", async (req, res) => {
 
     res.json({
       success: true,
-      message: "Podsumowanie zostało usunięte"
+      message: "Podsumowanie zostało usunięte",
     });
   } catch (error) {
     console.error("Error deleting summary:", error);
@@ -365,7 +380,13 @@ app.post("/api/process-file", upload.single("file"), async (req, res) => {
         result.data = lectureWithAudio;
       } catch (error) {
         console.error("Failed to generate lecture audio:", error.message);
-        result.data.audioError = error.message;
+        // Set proper audio failure structure
+        result.data = {
+          ...result.data,
+          audioAvailable: false,
+          error: error.message,
+          message: "Failed to generate audio, text-only version available",
+        };
       }
     }
 
@@ -411,7 +432,13 @@ app.post("/api/process-text", async (req, res) => {
         result.data = lectureWithAudio;
       } catch (error) {
         console.error("Failed to generate lecture audio:", error.message);
-        result.data.audioError = error.message;
+        // Set proper audio failure structure
+        result.data = {
+          ...result.data,
+          audioAvailable: false,
+          error: error.message,
+          message: "Failed to generate audio, text-only version available",
+        };
       }
     }
 
@@ -652,6 +679,179 @@ app.get("/api/voices", async (req, res) => {
     res.status(500).json({
       error: "Błąd podczas pobierania głosów",
       details: error.message,
+    });
+  }
+});
+
+// ElevenLabs Voice Management
+app.get("/api/elevenlabs/voices", async (req, res) => {
+  try {
+    const voices = await elevenLabsService.getVoices();
+    res.json(voices);
+  } catch (error) {
+    console.error("Error getting voices:", error);
+    res.status(500).json({
+      error: "Failed to fetch voices",
+      details: error.message,
+    });
+  }
+});
+
+app.post("/api/elevenlabs/set-voice", async (req, res) => {
+  try {
+    const { voiceId } = req.body;
+
+    if (!voiceId) {
+      return res.status(400).json({ error: "Voice ID is required" });
+    }
+
+    elevenLabsService.setVoiceId(voiceId);
+
+    res.json({
+      success: true,
+      message: `Voice changed to ${voiceId}`,
+      currentVoice: voiceId,
+    });
+  } catch (error) {
+    console.error("Error setting voice:", error);
+    res.status(500).json({
+      error: "Failed to set voice",
+      details: error.message,
+    });
+  }
+});
+
+// ElevenLabs Testing Endpoints
+app.get("/api/elevenlabs/test", async (req, res) => {
+  try {
+    const healthCheck = await elevenLabsService.healthCheck();
+    const voices = await elevenLabsService.getVoices();
+
+    res.json({
+      success: true,
+      healthCheck,
+      voices,
+      apiKey: elevenLabsService.apiKey
+        ? `${elevenLabsService.apiKey.substring(0, 8)}...`
+        : "Not set",
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      timestamp: new Date().toISOString(),
+    });
+  }
+});
+
+app.post("/api/elevenlabs/test-speech", async (req, res) => {
+  try {
+    const { text = "Hello world", voiceId } = req.body;
+
+    // Temporarily change voice if specified
+    const originalVoiceId = elevenLabsService.defaultVoiceId;
+    if (voiceId) {
+      elevenLabsService.setVoiceId(voiceId);
+    }
+
+    console.log(
+      `🧪 Testing ElevenLabs with text: "${text.substring(0, 50)}..."`
+    );
+
+    const result = await elevenLabsService.generateSpeech(text);
+
+    // Restore original voice if it was changed
+    if (voiceId && originalVoiceId !== voiceId) {
+      elevenLabsService.setVoiceId(originalVoiceId);
+    }
+
+    if (result.success && result.audioBuffer) {
+      res.set({
+        "Content-Type": result.mimeType,
+        "Content-Disposition": 'inline; filename="test-speech.mp3"',
+        "Content-Length": result.audioBuffer.byteLength,
+      });
+
+      res.send(Buffer.from(result.audioBuffer));
+    } else {
+      res.status(500).json({
+        success: false,
+        error: "Failed to generate audio",
+        result,
+      });
+    }
+  } catch (error) {
+    console.error("🧪 ElevenLabs test error:", error);
+
+    // Restore original voice if it was changed
+    if (voiceId && originalVoiceId !== voiceId) {
+      elevenLabsService.setVoiceId(originalVoiceId);
+    }
+
+    // Return detailed error information for debugging
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      details: {
+        apiKeyPresent: !!elevenLabsService.apiKey,
+        apiKeyPreview: elevenLabsService.apiKey
+          ? `${elevenLabsService.apiKey.substring(0, 8)}...`
+          : "Not set",
+        voiceId: elevenLabsService.defaultVoiceId,
+        isAvailable: elevenLabsService.isAvailable,
+      },
+    });
+  }
+});
+
+// Simple diagnostic endpoint
+app.get("/api/elevenlabs/diagnose", async (req, res) => {
+  try {
+    const diagnosis = {
+      apiKey: {
+        present: !!elevenLabsService.apiKey,
+        preview: elevenLabsService.apiKey
+          ? `${elevenLabsService.apiKey.substring(0, 8)}...`
+          : "Not set",
+        length: elevenLabsService.apiKey ? elevenLabsService.apiKey.length : 0,
+      },
+      service: {
+        isAvailable: elevenLabsService.isAvailable,
+        voiceId: elevenLabsService.defaultVoiceId,
+        baseUrl: elevenLabsService.baseUrl,
+      },
+    };
+
+    // Try to get user info for more detailed diagnosis
+    try {
+      const userResponse = await axios.get(
+        `${elevenLabsService.baseUrl}/user`,
+        {
+          headers: {
+            "xi-api-key": elevenLabsService.apiKey,
+          },
+          timeout: 5000,
+        }
+      );
+
+      diagnosis.account = {
+        status: "accessible",
+        subscription: userResponse.data.subscription?.tier || "unknown",
+        characterLimit: userResponse.data.subscription?.character_limit,
+        charactersUsed: userResponse.data.subscription?.character_count,
+      };
+    } catch (userError) {
+      diagnosis.account = {
+        status: "error",
+        error: userError.response?.status || userError.message,
+      };
+    }
+
+    res.json(diagnosis);
+  } catch (error) {
+    res.status(500).json({
+      error: error.message,
     });
   }
 });

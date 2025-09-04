@@ -204,9 +204,12 @@ class ApiService {
 
   async generateSummary(materialId, selectedPages = null) {
     try {
-      const response = await this.api.post(`/api/materials/${materialId}/summary`, {
-        selectedPages: selectedPages,
-      });
+      const response = await this.api.post(
+        `/api/materials/${materialId}/summary`,
+        {
+          selectedPages: selectedPages,
+        }
+      );
       return response.data;
     } catch (error) {
       throw error;
@@ -215,7 +218,9 @@ class ApiService {
 
   async getSummary(materialId) {
     try {
-      const response = await this.api.get(`/api/materials/${materialId}/summary`);
+      const response = await this.api.get(
+        `/api/materials/${materialId}/summary`
+      );
       return response.data;
     } catch (error) {
       throw error;
@@ -224,7 +229,9 @@ class ApiService {
 
   async deleteSummary(materialId) {
     try {
-      const response = await this.api.delete(`/api/materials/${materialId}/summary`);
+      const response = await this.api.delete(
+        `/api/materials/${materialId}/summary`
+      );
       return response.data;
     } catch (error) {
       throw error;
@@ -250,6 +257,42 @@ class ApiService {
     const i = Math.floor(Math.log(bytes) / Math.log(k));
 
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
+  }
+
+  // ElevenLabs Voice Management
+  async getVoices() {
+    const response = await this.api.get("/api/elevenlabs/voices");
+    return response.data;
+  }
+
+  async setVoice(voiceId) {
+    const response = await this.api.post("/api/elevenlabs/set-voice", {
+      voiceId,
+    });
+    return response.data;
+  }
+
+  // ElevenLabs Testing Methods
+  async testElevenLabs() {
+    const response = await this.api.get("/api/elevenlabs/test");
+    return response.data;
+  }
+
+  async diagnosElevenLabs() {
+    const response = await this.api.get("/api/elevenlabs/diagnose");
+    return response.data;
+  }
+
+  async testElevenLabsSpeech(text) {
+    const response = await this.api.post(
+      "/api/elevenlabs/test-speech",
+      { text },
+      {
+        responseType: "blob",
+        timeout: 60000, // 1 minute timeout for audio generation
+      }
+    );
+    return response;
   }
 }
 

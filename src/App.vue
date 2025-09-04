@@ -421,6 +421,123 @@
               </v-chip>
             </div>
 
+            <!-- Audio Player (Always show for lectures) -->
+            <v-card
+              variant="outlined"
+              class="mb-4"
+              :color="
+                processedResult.result.audioAvailable ? 'primary' : 'orange'
+              "
+            >
+              <v-card-title class="d-flex align-center">
+                <v-icon
+                  class="mr-2"
+                  :color="
+                    processedResult.result.audioAvailable ? 'primary' : 'orange'
+                  "
+                >
+                  {{
+                    processedResult.result.audioAvailable
+                      ? "mdi-volume-high"
+                      : "mdi-volume-off"
+                  }}
+                </v-icon>
+                Odtwarzacz Lektora
+                <v-spacer></v-spacer>
+                <v-chip
+                  size="small"
+                  :color="
+                    processedResult.result.audioAvailable
+                      ? 'success'
+                      : 'warning'
+                  "
+                  variant="tonal"
+                >
+                  {{
+                    processedResult.result.audioAvailable
+                      ? "Audio dostępne"
+                      : "Audio niedostępne"
+                  }}
+                </v-chip>
+              </v-card-title>
+              <v-card-text>
+                <div class="audio-player-container">
+                  <audio
+                    v-if="lectureAudioUrl"
+                    controls
+                    preload="metadata"
+                    style="width: 100%"
+                    class="mb-3"
+                  >
+                    <source :src="lectureAudioUrl" type="audio/mpeg" />
+                    Your browser does not support the audio element.
+                  </audio>
+
+                  <!-- No Audio Loaded Yet -->
+                  <div v-if="!lectureAudioUrl" class="text-center py-3">
+                    <v-alert
+                      v-if="
+                        !processedResult.result.audioAvailable &&
+                        processedResult.result.error
+                      "
+                      type="warning"
+                      variant="tonal"
+                      class="mb-3"
+                    >
+                      <strong>Błąd generacji audio:</strong>
+                      {{ processedResult.result.error }}
+                    </v-alert>
+
+                    <v-btn
+                      v-if="processedResult.result.audioAvailable"
+                      @click="loadLectureAudio"
+                      :loading="loadingAudio"
+                      color="primary"
+                      prepend-icon="mdi-play"
+                    >
+                      Załaduj Audio
+                    </v-btn>
+
+                    <v-btn
+                      v-else
+                      @click="regenerateAudio"
+                      :loading="regeneratingAudio"
+                      color="orange"
+                      prepend-icon="mdi-refresh"
+                    >
+                      Wygeneruj Audio
+                    </v-btn>
+                  </div>
+
+                  <div class="d-flex gap-2 mt-2">
+                    <v-btn
+                      v-if="lectureAudioUrl"
+                      :href="lectureAudioUrl"
+                      download="lecture.mp3"
+                      color="success"
+                      variant="outlined"
+                      prepend-icon="mdi-download"
+                      size="small"
+                    >
+                      Pobierz Audio
+                    </v-btn>
+
+                    <v-btn
+                      @click="regenerateAudio"
+                      color="orange"
+                      variant="outlined"
+                      prepend-icon="mdi-refresh"
+                      size="small"
+                      :loading="regeneratingAudio"
+                    >
+                      Regeneruj Audio
+                    </v-btn>
+                  </div>
+                </div>
+              </v-card-text>
+            </v-card>
+
+            <!-- Lecture Text Content -->
             <v-card
               v-for="(section, index) in processedResult.result.data.sections"
               :key="index"
@@ -428,7 +545,7 @@
               class="mb-4"
             >
               <v-card-title class="d-flex align-center">
-                <v-icon class="mr-2">mdi-play-circle-outline</v-icon>
+                <v-icon class="mr-2">mdi-text-box-outline</v-icon>
                 {{ section.title }}
                 <v-spacer></v-spacer>
                 <v-chip size="small" variant="tonal">{{
@@ -913,6 +1030,159 @@
         <v-btn variant="text" @click="showSnackbar = false"> Zamknij </v-btn>
       </template>
     </v-snackbar>
+
+    <!-- ElevenLabs Debug FAB -->
+    <v-fab
+      location="bottom right"
+      color="orange"
+      icon="mdi-microphone-settings"
+      @click="showElevenLabsTest = !showElevenLabsTest"
+      style="margin-bottom: 80px"
+    ></v-fab>
+
+    <!-- ElevenLabs Testing Dialog -->
+    <v-dialog v-model="showElevenLabsTest" max-width="800">
+      <v-card>
+        <v-card-title class="d-flex align-center">
+          <v-icon class="me-2">mdi-microphone-settings</v-icon>
+          ElevenLabs Testing Playground
+        </v-card-title>
+
+        <v-divider></v-divider>
+
+        <v-card-text class="pa-6">
+          <!-- API Status Test -->
+          <v-card variant="outlined" class="mb-4">
+            <v-card-title class="text-h6">
+              <v-icon class="me-2">mdi-api</v-icon>
+              API Status Test
+            </v-card-title>
+            <v-card-text>
+              <div class="d-flex gap-3 mb-3">
+                <v-btn
+                  @click="testElevenLabs"
+                  color="primary"
+                  prepend-icon="mdi-play"
+                  size="small"
+                >
+                  Test API Connection
+                </v-btn>
+
+                <v-btn
+                  @click="diagnosElevenLabs"
+                  color="info"
+                  prepend-icon="mdi-medical-bag"
+                  size="small"
+                >
+                  Diagnose Account
+                </v-btn>
+              </div>
+
+              <div v-if="elevenLabsDiagnosis" class="mt-3 mb-3">
+                <v-alert type="info" variant="tonal">
+                  <div class="text-subtitle-2 mb-2">🔍 Account Diagnosis:</div>
+                  <div v-if="elevenLabsDiagnosis.account">
+                    <strong>Account Status:</strong>
+                    {{ elevenLabsDiagnosis.account.status }}<br />
+                    <strong>Subscription:</strong>
+                    {{ elevenLabsDiagnosis.account.subscription || "Unknown"
+                    }}<br />
+                    <span v-if="elevenLabsDiagnosis.account.characterLimit">
+                      <strong>Character Limit:</strong>
+                      {{ elevenLabsDiagnosis.account.characterLimit }}<br />
+                      <strong>Characters Used:</strong>
+                      {{ elevenLabsDiagnosis.account.charactersUsed }}<br />
+                    </span>
+                    <span v-if="elevenLabsDiagnosis.account.error">
+                      <strong>Error:</strong>
+                      {{ elevenLabsDiagnosis.account.error }}
+                    </span>
+                  </div>
+                  <div v-if="elevenLabsDiagnosis.apiKey">
+                    <strong>API Key:</strong>
+                    {{
+                      elevenLabsDiagnosis.apiKey.present
+                        ? "✅ Present"
+                        : "❌ Missing"
+                    }}
+                    ({{ elevenLabsDiagnosis.apiKey.length }} chars)
+                  </div>
+                </v-alert>
+              </div>
+
+              <div v-if="elevenLabsTestResult" class="mt-3">
+                <v-alert
+                  :type="elevenLabsTestResult.success ? 'success' : 'error'"
+                  variant="tonal"
+                >
+                  <pre>{{ JSON.stringify(elevenLabsTestResult, null, 2) }}</pre>
+                </v-alert>
+              </div>
+            </v-card-text>
+          </v-card>
+
+          <!-- Audio Generation Test -->
+          <v-card variant="outlined">
+            <v-card-title class="text-h6">
+              <v-icon class="me-2">mdi-volume-high</v-icon>
+              Audio Generation Test
+            </v-card-title>
+            <v-card-text>
+              <v-textarea
+                v-model="testText"
+                label="Test Text (English recommended for free accounts)"
+                placeholder="Enter text to generate audio..."
+                rows="3"
+                variant="outlined"
+                class="mb-3"
+              ></v-textarea>
+
+              <v-btn
+                @click="testElevenLabsAudio"
+                :loading="testingAudio"
+                color="secondary"
+                prepend-icon="mdi-microphone"
+                class="mb-3"
+              >
+                Generate Audio
+              </v-btn>
+
+              <!-- Audio Player -->
+              <div v-if="audioUrl" class="mt-4">
+                <v-alert type="success" variant="tonal" class="mb-3">
+                  ✅ Audio generated successfully!
+                </v-alert>
+
+                <audio
+                  :src="audioUrl"
+                  controls
+                  style="width: 100%"
+                  class="mb-3"
+                ></audio>
+
+                <v-btn
+                  :href="audioUrl"
+                  download="test-audio.mp3"
+                  color="success"
+                  variant="outlined"
+                  prepend-icon="mdi-download"
+                  size="small"
+                >
+                  Download Audio
+                </v-btn>
+              </div>
+            </v-card-text>
+          </v-card>
+        </v-card-text>
+
+        <v-divider></v-divider>
+
+        <v-card-actions class="pa-4">
+          <v-spacer></v-spacer>
+          <v-btn @click="showElevenLabsTest = false">Close</v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
   </v-app>
 </template>
 
@@ -966,6 +1236,24 @@ export default {
       isGeneratingSummary: false,
       currentSummary: null,
       summaryMode: "view", // 'select', 'generating', 'view'
+
+      // ElevenLabs Testing
+      showElevenLabsTest: false,
+      elevenLabsTestResult: null,
+      elevenLabsDiagnosis: null,
+      testText: "Hello world",
+      testingAudio: false,
+      audioUrl: null,
+
+      // Lecture Audio Player
+      lectureAudioUrl: null,
+      loadingAudio: false,
+      regeneratingAudio: false,
+      currentAudioSessionId: null,
+
+      // Processing Results
+      showResultDialog: false,
+      processedResult: null,
     };
   },
   computed: {
@@ -1022,6 +1310,9 @@ export default {
   },
   async mounted() {
     await this.loadMaterials();
+  },
+  beforeUnmount() {
+    this.cleanupAudioUrl();
   },
   methods: {
     // Materials Management Methods
@@ -1205,6 +1496,236 @@ export default {
       await this.uploadNewMaterial(file);
     },
 
+    // ElevenLabs Testing Methods
+    async testElevenLabs() {
+      try {
+        this.elevenLabsTestResult = await apiService.testElevenLabs();
+        console.log("ElevenLabs test result:", this.elevenLabsTestResult);
+      } catch (error) {
+        console.error("ElevenLabs test failed:", error);
+        this.elevenLabsTestResult = {
+          success: false,
+          error: error.message,
+        };
+      }
+    },
+
+    async diagnosElevenLabs() {
+      try {
+        this.elevenLabsDiagnosis = await apiService.diagnosElevenLabs();
+        console.log("ElevenLabs diagnosis:", this.elevenLabsDiagnosis);
+      } catch (error) {
+        console.error("ElevenLabs diagnosis failed:", error);
+        this.elevenLabsDiagnosis = {
+          error: error.message,
+        };
+      }
+    },
+
+    async testElevenLabsAudio() {
+      if (!this.testText.trim()) {
+        this.showNotification("Wpisz tekst do testu", "warning");
+        return;
+      }
+
+      this.testingAudio = true;
+      try {
+        console.log("Testing ElevenLabs audio with text:", this.testText);
+
+        const response = await apiService.testElevenLabsSpeech(this.testText);
+
+        if (response.data) {
+          // Create blob URL for audio playback
+          const audioBlob = new Blob([response.data], { type: "audio/mpeg" });
+          if (this.audioUrl) {
+            URL.revokeObjectURL(this.audioUrl);
+          }
+          this.audioUrl = URL.createObjectURL(audioBlob);
+
+          console.log("✅ Audio generated successfully!");
+          this.showNotification(
+            "Sukces! Audio zostało wygenerowane.",
+            "success"
+          );
+        }
+      } catch (error) {
+        console.error("ElevenLabs audio test failed:", error);
+        this.showNotification(`Błąd: ${error.message}`, "error");
+      } finally {
+        this.testingAudio = false;
+      }
+    },
+
+    // Lecture Audio Player Methods
+    async loadLectureAudio() {
+      if (!this.processedResult || !this.processedResult.sessionId) {
+        this.showNotification("Brak identyfikatora sesji", "error");
+        return;
+      }
+
+      this.loadingAudio = true;
+      try {
+        console.log(
+          "Loading lecture audio for session:",
+          this.processedResult.sessionId
+        );
+
+        const response = await apiService.api.get(
+          `/api/download-audio/${this.processedResult.sessionId}`,
+          {
+            responseType: "blob",
+            timeout: 120000, // 2 minutes timeout for large audio files
+          }
+        );
+
+        if (response.data) {
+          // Create blob URL for audio playback
+          const audioBlob = new Blob([response.data], { type: "audio/mpeg" });
+          if (this.lectureAudioUrl) {
+            URL.revokeObjectURL(this.lectureAudioUrl);
+          }
+          this.lectureAudioUrl = URL.createObjectURL(audioBlob);
+          this.currentAudioSessionId = this.processedResult.sessionId;
+
+          console.log("✅ Lecture audio loaded successfully!");
+          this.showNotification(
+            "Audio zostało załadowane pomyślnie!",
+            "success"
+          );
+        }
+      } catch (error) {
+        console.error("Failed to load lecture audio:", error);
+        this.showNotification(
+          `Błąd ładowania audio: ${error.message}`,
+          "error"
+        );
+      } finally {
+        this.loadingAudio = false;
+      }
+    },
+
+    async regenerateAudio() {
+      if (!this.processedResult || !this.processedResult.result.data) {
+        this.showNotification("Brak danych lektora do regeneracji", "error");
+        return;
+      }
+
+      this.regeneratingAudio = true;
+      try {
+        console.log("Regenerating lecture audio...");
+
+        // Get the full lecture script
+        let fullScript = this.processedResult.result.data.script;
+        if (!fullScript && this.processedResult.result.data.sections) {
+          fullScript = this.processedResult.result.data.sections
+            .map((section) => section.content)
+            .join("\n\n");
+        }
+
+        if (!fullScript) {
+          throw new Error("Brak tekstu lektora do wygenerowania");
+        }
+
+        const response = await apiService.testElevenLabsSpeech(fullScript);
+
+        if (response.data) {
+          // Create blob URL for audio playback
+          const audioBlob = new Blob([response.data], { type: "audio/mpeg" });
+          if (this.lectureAudioUrl) {
+            URL.revokeObjectURL(this.lectureAudioUrl);
+          }
+          this.lectureAudioUrl = URL.createObjectURL(audioBlob);
+
+          console.log("✅ Lecture audio regenerated successfully!");
+          this.showNotification(
+            "Audio zostało zregenerowane pomyślnie!",
+            "success"
+          );
+
+          // Update the processedResult to mark audio as available
+          if (this.processedResult && this.processedResult.result) {
+            this.processedResult.result.audioAvailable = true;
+            this.processedResult.result.error = null;
+          }
+        }
+      } catch (error) {
+        console.error("Failed to regenerate lecture audio:", error);
+        this.showNotification(
+          `Błąd regeneracji audio: ${error.message}`,
+          "error"
+        );
+      } finally {
+        this.regeneratingAudio = false;
+      }
+    },
+
+    // Cleanup audio URL when component is destroyed
+    cleanupAudioUrl() {
+      if (this.lectureAudioUrl) {
+        URL.revokeObjectURL(this.lectureAudioUrl);
+        this.lectureAudioUrl = null;
+      }
+      if (this.audioUrl) {
+        URL.revokeObjectURL(this.audioUrl);
+        this.audioUrl = null;
+      }
+    },
+
+    // Results Dialog Methods
+    getResultTitle() {
+      if (!this.processedResult) return "";
+
+      const labels = {
+        summary: "Podsumowanie",
+        quiz: "Quiz",
+        lecture: "Lektor",
+      };
+
+      return labels[this.processedResult.processingType] || "Wyniki";
+    },
+
+    async downloadResult() {
+      if (!this.processedResult) return;
+
+      try {
+        if (
+          this.processedResult.processingType === "lecture" &&
+          this.lectureAudioUrl
+        ) {
+          // Download audio file
+          const link = document.createElement("a");
+          link.href = this.lectureAudioUrl;
+          link.download = "lecture.mp3";
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+        } else {
+          // Download text content
+          const content = JSON.stringify(
+            this.processedResult.result.data,
+            null,
+            2
+          );
+          const blob = new Blob([content], { type: "application/json" });
+          const url = URL.createObjectURL(blob);
+
+          const link = document.createElement("a");
+          link.href = url;
+          link.download = `${this.processedResult.processingType}-result.json`;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+
+          URL.revokeObjectURL(url);
+        }
+
+        this.showNotification("Plik został pobrany!", "success");
+      } catch (error) {
+        console.error("Download failed:", error);
+        this.showNotification("Błąd podczas pobierania", "error");
+      }
+    },
+
     // Original Methods (updated to support new upload flow)
     selectOption(option) {
       this.selectedOption = option;
@@ -1289,6 +1810,7 @@ export default {
             this.startInteractiveQuiz(result, contentInfo);
           } else {
             this.processedResult = result;
+            this.processedResult.processingType = this.selectedProcessing; // Ensure processing type is set
             this.showResultDialog = true;
             this.closeMaterialDialog();
 
@@ -1297,6 +1819,9 @@ export default {
               `Pomyślnie wygenerowano ${processingType} dla: ${contentInfo}`,
               "success"
             );
+
+            // For lecture, always show the results (audio player will handle loading state)
+            // No auto-loading - user will manually trigger audio generation
           }
         } else {
           throw new Error("Nieprawidłowa odpowiedź z serwera");
@@ -1603,5 +2128,19 @@ export default {
 
 .bg-success-lighten-4 {
   background-color: rgba(76, 175, 80, 0.1) !important;
+}
+
+.audio-player-container {
+  padding: 8px;
+}
+
+.audio-player-container audio {
+  border-radius: 8px;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.1));
+}
+
+.audio-player-container audio:focus {
+  outline: 2px solid rgb(var(--v-theme-primary));
+  outline-offset: 2px;
 }
 </style>
