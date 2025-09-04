@@ -125,6 +125,112 @@ class ApiService {
     }
   }
 
+  // Interactive Quiz API methods
+  async startQuiz(text) {
+    try {
+      const response = await this.api.post("/api/start-quiz", {
+        text: text,
+      });
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  async submitAnswer(sessionId, questionIndex, selectedAnswer) {
+    try {
+      const response = await this.api.post(`/api/quiz/${sessionId}/answer`, {
+        questionIndex: questionIndex,
+        selectedAnswer: selectedAnswer,
+      });
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  async getNextQuestion(sessionId) {
+    try {
+      const response = await this.api.post(
+        `/api/quiz/${sessionId}/next-question`
+      );
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  async endQuiz(sessionId) {
+    try {
+      const response = await this.api.post(`/api/quiz/${sessionId}/end`);
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  // Materials Management API methods
+  async uploadMaterial(file) {
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const response = await this.api.post("/api/upload-material", formData, {
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
+        onUploadProgress: (progressEvent) => {
+          const progress = Math.round(
+            (progressEvent.loaded * 100) / progressEvent.total
+          );
+          console.log(`Upload progress: ${progress}%`);
+        },
+      });
+
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  async getMaterials() {
+    try {
+      const response = await this.api.get("/api/materials");
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  async generateSummary(materialId, selectedPages = null) {
+    try {
+      const response = await this.api.post(`/api/materials/${materialId}/summary`, {
+        selectedPages: selectedPages,
+      });
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  async getSummary(materialId) {
+    try {
+      const response = await this.api.get(`/api/materials/${materialId}/summary`);
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  async deleteSummary(materialId) {
+    try {
+      const response = await this.api.delete(`/api/materials/${materialId}/summary`);
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
+  }
+
   // Get processing type label in Polish
   getProcessingTypeLabel(type) {
     const labels = {

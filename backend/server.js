@@ -110,7 +110,223 @@ app.get("/api/elevenlabs-status", async (req, res) => {
   }
 });
 
-// Process file upload
+// Upload and store material (new endpoint)
+app.post("/api/upload-material", upload.single("file"), async (req, res) => {
+  try {
+    const file = req.file;
+
+    if (!file) {
+      return res.status(400).json({ error: "Brak pliku do wgrania" });
+    }
+
+    console.log(`Uploading material: ${file.originalname}`);
+
+    // Extract text and get page count
+    const extractedText = await fileProcessor.extractText(file);
+    const pageCount = await fileProcessor.estimatePageCount(file, extractedText);
+
+    if (!extractedText || extractedText.trim().length === 0) {
+      return res
+        .status(400)
+        .json({ error: "Nie udało się wyodrębnić tekstu z pliku" });
+    }
+
+    // Create material entry
+    const materialId = `material_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`;
+    const material = {
+      id: materialId,
+      name: file.originalname,
+      originalName: file.originalname,
+      mimeType: file.mimetype,
+      size: file.size,
+      uploadDate: new Date(),
+      pageCount: pageCount,
+      fullText: extractedText,
+      hasQuiz: false,
+      hasSummary: false,
+      hasLecture: false
+    };
+
+    materials.set(materialId, material);
+
+    res.json({
+      success: true,
+      material: {
+        id: materialId,
+        name: material.name,
+        pageCount: material.pageCount,
+        uploadDate: material.uploadDate,
+        size: material.size
+      }
+    });
+  } catch (error) {
+    console.error("Error uploading material:", error);
+    res.status(500).json({
+      error: "Błąd podczas wgrywania materiału",
+      details: error.message,
+    });
+  }
+});
+
+// Get materials list
+app.get("/api/materials", async (req, res) => {
+  try {
+    const materialsList = Array.from(materials.values()).map(material => ({
+      id: material.id,
+      name: material.name,
+      pageCount: material.pageCount,
+      uploadDate: material.uploadDate,
+      size: material.size,
+      hasQuiz: material.hasQuiz,
+      hasSummary: material.hasSummary,
+      hasLecture: material.hasLecture
+    }));
+
+    res.json({
+      success: true,
+      materials: materialsList
+    });
+  } catch (error) {
+    console.error("Error getting materials:", error);
+    res.status(500).json({
+      error: "Błąd podczas pobierania materiałów",
+      details: error.message,
+    });
+  }
+});
+
+// Generate summary for material
+app.post("/api/materials/:materialId/summary", async (req, res) => {
+  try {
+    const { materialId } = req.params;
+    const { selectedPages } = req.body; // Array of page numbers or null for all pages
+
+    const material = materials.get(materialId);
+    if (!material) {
+      return res.status(404).json({ error: "Materiał nie został znaleziony" });
+    }
+
+    // Check if summary already exists
+    const existingSummary = summaries.get(materialId);
+    if (existingSummary) {
+      return res.json({
+        success: true,
+        summary: existingSummary,
+        isExisting: true
+      });
+    }
+
+    console.log(`Generating summary for material: ${material.name}`);
+
+    // Determine text to summarize based on page selection
+    let textToSummarize = material.fullText;
+    let pageRange = "wszystkie strony";
+    
+    if (selectedPages && selectedPages.length > 0) {
+      // In a real implementation, you'd extract specific pages
+      // For now, we'll use the full text but note the selected pages
+      pageRange = `strony: ${selectedPages.join(", ")}`;
+    } else if (material.pageCount > 5) {
+      // Auto-select first 5 pages if not specified
+      pageRange = "strony: 1-5";
+    }
+
+    // Generate summary
+    const summaryResult = await aiService.generateContent(textToSummarize, "summary");
+    
+    if (summaryResult && summaryResult.data) {
+      // Store summary
+      const summary = {
+        id: `summary_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`,
+        materialId: materialId,
+        materialName: material.name,
+        pageRange: pageRange,
+        content: summaryResult.data,
+        createdDate: new Date(),
+        selectedPages: selectedPages || []
+      };
+
+      summaries.set(materialId, summary);
+      
+      // Update material to indicate it has a summary
+      material.hasSummary = true;
+      materials.set(materialId, material);
+
+      res.json({
+        success: true,
+        summary: summary,
+        isExisting: false
+      });
+    } else {
+      res.status(500).json({
+        error: "Nie udało się wygenerować podsumowania"
+      });
+    }
+  } catch (error) {
+    console.error("Error generating summary:", error);
+    res.status(500).json({
+      error: "Błąd podczas generowania podsumowania",
+      details: error.message,
+    });
+  }
+});
+
+// Get existing summary
+app.get("/api/materials/:materialId/summary", async (req, res) => {
+  try {
+    const { materialId } = req.params;
+
+    const summary = summaries.get(materialId);
+    if (!summary) {
+      return res.status(404).json({ error: "Podsumowanie nie zostało znalezione" });
+    }
+
+    res.json({
+      success: true,
+      summary: summary
+    });
+  } catch (error) {
+    console.error("Error getting summary:", error);
+    res.status(500).json({
+      error: "Błąd podczas pobierania podsumowania",
+      details: error.message,
+    });
+  }
+});
+
+// Delete summary
+app.delete("/api/materials/:materialId/summary", async (req, res) => {
+  try {
+    const { materialId } = req.params;
+
+    const summary = summaries.get(materialId);
+    if (!summary) {
+      return res.status(404).json({ error: "Podsumowanie nie zostało znalezione" });
+    }
+
+    summaries.delete(materialId);
+    
+    // Update material to indicate it no longer has a summary
+    const material = materials.get(materialId);
+    if (material) {
+      material.hasSummary = false;
+      materials.set(materialId, material);
+    }
+
+    res.json({
+      success: true,
+      message: "Podsumowanie zostało usunięte"
+    });
+  } catch (error) {
+    console.error("Error deleting summary:", error);
+    res.status(500).json({
+      error: "Błąd podczas usuwania podsumowania",
+      details: error.message,
+    });
+  }
+});
+
+// Process file upload (legacy endpoint for backward compatibility)
 app.post("/api/process-file", upload.single("file"), async (req, res) => {
   try {
     const { processingType } = req.body;
@@ -215,6 +431,10 @@ app.post("/api/process-text", async (req, res) => {
 
 // Quiz session management
 const quizSessions = new Map();
+
+// Materials storage (in production, use a database)
+const materials = new Map();
+const summaries = new Map();
 
 // Start a new quiz session
 app.post("/api/start-quiz", async (req, res) => {
