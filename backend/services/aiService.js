@@ -1,60 +1,63 @@
-const Anthropic = require("@anthropic-ai/sdk");
+const { GoogleGenerativeAI } = require("@google/generative-ai");
 
 class AIService {
   constructor() {
-    this.anthropic = null;
-    this.initializeClaude();
+    this.genAI = null;
+    this.model = null;
+    this.initializeGemini();
   }
 
-  initializeClaude() {
-    if (process.env.ANTHROPIC_API_KEY) {
+  initializeGemini() {
+    if (process.env.GEMINI_API_KEY) {
       try {
-        this.anthropic = new Anthropic({
-          apiKey: process.env.ANTHROPIC_API_KEY,
-        });
-        console.log("✅ Claude (Anthropic) API initialized");
+        this.genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+        this.model = this.genAI.getGenerativeModel({ model: "gemini-pro" });
+        console.log("✅ Gemini (Google) API initialized");
       } catch (error) {
-        console.warn("⚠️ Claude initialization failed:", error.message);
-        this.anthropic = null;
+        console.warn("⚠️ Gemini initialization failed:", error.message);
+        this.genAI = null;
+        this.model = null;
       }
     } else {
-      console.log("ℹ️ Claude API key not found, using mock responses");
-      console.log(
-        "💡 Set ANTHROPIC_API_KEY environment variable to use real AI"
-      );
+      console.log("ℹ️ Gemini API key not found, using mock responses");
+      console.log("💡 Set GEMINI_API_KEY environment variable to use real AI");
     }
   }
 
   async generateContent(text, processingType) {
-    // For testing purposes, let's try Claude first, then fall back to mock
-    if (!this.anthropic) {
-      console.log("Using mock AI content generation - Claude not initialized");
+    // For testing purposes, let's try Gemini first, then fall back to mock
+    if (!this.model) {
+      console.log("Using mock AI content generation - Gemini not initialized");
       return this.generateMockContent(text, processingType);
     }
 
     try {
       const prompt = this.buildPrompt(text, processingType);
 
-      console.log(`🤖 Generating ${processingType} with Claude (Anthropic)`);
+      console.log(`🤖 Generating ${processingType} with Gemini (Google)`);
 
-      const completion = await this.anthropic.messages.create({
-        model: "claude-3-haiku-20240307",
-        max_tokens: 2000,
-        temperature: 0.7,
-        system:
-          "Jesteś asystentem edukacyjnym specjalizującym się w tworzeniu materiałów do nauki w języku polskim.",
-        messages: [
+      const result = await this.model.generateContent({
+        contents: [
           {
             role: "user",
-            content: prompt,
+            parts: [
+              {
+                text: `Jesteś asystentem edukacyjnym specjalizującym się w tworzeniu materiałów do nauki w języku polskim.\n\n${prompt}`,
+              },
+            ],
           },
         ],
+        generationConfig: {
+          maxOutputTokens: 2000,
+          temperature: 0.7,
+        },
       });
 
-      const result = completion.content[0].text;
-      return this.formatResult(result, processingType);
+      const response = await result.response;
+      const textResult = response.text();
+      return this.formatResult(textResult, processingType);
     } catch (error) {
-      console.error("Claude API Error:", error.message);
+      console.error("Gemini API Error:", error.message);
       console.log("Falling back to mock content generation");
       return this.generateMockContent(text, processingType);
     }
@@ -175,7 +178,7 @@ WAŻNE: Odpowiedz TYLKO w formacie JSON, bez dodatkowych komentarzy:
         formatted: true,
       };
     } catch (error) {
-      console.warn("Failed to parse OpenAI response as JSON:", error.message);
+      console.warn("Failed to parse Gemini response as JSON:", error.message);
 
       // If JSON parsing fails, return as plain text with structure
       return {
@@ -230,7 +233,7 @@ WAŻNE: Odpowiedz TYLKO w formacie JSON, bez dodatkowych komentarzy:
     }
   }
 
-  // Fallback method for when OpenAI is not available
+  // Fallback method for when Gemini is not available
   generateMockContent(text, processingType) {
     console.log("Using mock AI content generation");
 
@@ -241,7 +244,7 @@ WAŻNE: Odpowiedz TYLKO w formacie JSON, bez dodatkowych komentarzy:
           data: {
             title: "Podsumowanie materiału",
             summary:
-              "To jest przykładowe podsumowanie wygenerowane przez AI. W rzeczywistej implementacji tutaj byłaby analiza dostarczonego materiału przez OpenAI GPT-3.5-turbo.",
+              "To jest przykładowe podsumowanie wygenerowane przez AI. W rzeczywistej implementacji tutaj byłaby analiza dostarczonego materiału przez Google Gemini.",
             keyPoints: [
               "Główny punkt 1 z materiału",
               "Kluczowa informacja 2",
@@ -281,7 +284,7 @@ WAŻNE: Odpowiedz TYLKO w formacie JSON, bez dodatkowych komentarzy:
             title: "Wykład na podstawie materiału",
             duration: "5 minut",
             script:
-              "Witamy na dzisiejszym wykładzie. Omówimy kluczowe zagadnienia przedstawione w materiale. Główna treść wykładu zostałaby tutaj wygenerowana na podstawie analizy dostarczonego materiału przez OpenAI. Podsumowując, omówiliśmy najważniejsze aspekty materiału.",
+              "Witamy na dzisiejszym wykładzie. Omówimy kluczowe zagadnienia przedstawione w materiale. Główna treść wykładu zostałaby tutaj wygenerowana na podstawie analizy dostarczonego materiału przez Google Gemini. Podsumowując, omówiliśmy najważniejsze aspekty materiału.",
             sections: [
               {
                 title: "Wprowadzenie",
@@ -292,7 +295,7 @@ WAŻNE: Odpowiedz TYLKO w formacie JSON, bez dodatkowych komentarzy:
               {
                 title: "Główna część",
                 content:
-                  "Główna treść wykładu zostałaby tutaj wygenerowana na podstawie analizy dostarczonego materiału przez OpenAI.",
+                  "Główna treść wykładu zostałaby tutaj wygenerowana na podstawie analizy dostarczonego materiału przez Google Gemini.",
                 duration: "3 minuty",
               },
               {
@@ -313,14 +316,14 @@ WAŻNE: Odpowiedz TYLKO w formacie JSON, bez dodatkowych komentarzy:
 
   // Generate quiz questions on-demand (for interactive quiz)
   async generateQuizQuestions(text, questionCount = 1) {
-    if (!this.anthropic) {
-      console.log("Using mock quiz questions - Claude not initialized");
+    if (!this.model) {
+      console.log("Using mock quiz questions - Gemini not initialized");
       return this.generateMockQuizQuestions(text, questionCount);
     }
 
     try {
       console.log(
-        `🤖 Generating ${questionCount} quiz question(s) with Claude`
+        `🤖 Generating ${questionCount} quiz question(s) with Gemini`
       );
 
       // Add small delay to help with rate limiting (only for subsequent questions)
@@ -359,27 +362,31 @@ WAŻNE: Odpowiedz TYLKO w formacie JSON, bez dodatkowych komentarzy:
   ]
 }`;
 
-      const completion = await this.anthropic.messages.create({
-        model: "claude-3-haiku-20240307",
-        max_tokens: 800, // Reduced to help with rate limiting
-        temperature: 0.5, // Lower temperature for more consistent questions
-        system:
-          "Jesteś asystentem edukacyjnym specjalizującym się w tworzeniu pytań quizowych w języku polskim.",
-        messages: [
+      const result = await this.model.generateContent({
+        contents: [
           {
             role: "user",
-            content: prompt,
+            parts: [
+              {
+                text: `Jesteś asystentem edukacyjnym specjalizującym się w tworzeniu pytań quizowych w języku polskim.\n\n${prompt}`,
+              },
+            ],
           },
         ],
+        generationConfig: {
+          maxOutputTokens: 800, // Reduced to help with rate limiting
+          temperature: 0.5, // Lower temperature for more consistent questions
+        },
       });
 
-      const result = completion.content[0].text;
+      const response = await result.response;
+      const textResult = response.text();
       console.log(
-        "🤖 [AI] Raw Claude response:",
-        result.substring(0, 500) + "..."
+        "🤖 [AI] Raw Gemini response:",
+        textResult.substring(0, 500) + "..."
       );
 
-      const parsed = this.parseQuizResponse(result);
+      const parsed = this.parseQuizResponse(textResult);
       console.log("🔄 [AI] Parsed response:", JSON.stringify(parsed, null, 2));
 
       if (!parsed.questions || parsed.questions.length === 0) {
@@ -395,7 +402,7 @@ WAŻNE: Odpowiedz TYLKO w formacie JSON, bez dodatkowych komentarzy:
       return parsed.questions || [];
     } catch (error) {
       console.error(
-        "💥 [AI] Claude API Error (quiz questions):",
+        "💥 [AI] Gemini API Error (quiz questions):",
         error.message
       );
       console.error("🔍 [AI] Error details:", error);
@@ -404,7 +411,7 @@ WAŻNE: Odpowiedz TYLKO w formacie JSON, bez dodatkowych komentarzy:
     }
   }
 
-  // Parse quiz response from Claude
+  // Parse quiz response from Gemini
   parseQuizResponse(result) {
     try {
       console.log("🔧 [AI] Starting to parse quiz response...");
@@ -438,7 +445,7 @@ WAŻNE: Odpowiedz TYLKO w formacie JSON, bez dodatkowych komentarzy:
       return parsed;
     } catch (error) {
       console.warn(
-        "💥 [AI] Failed to parse Claude quiz response as JSON:",
+        "💥 [AI] Failed to parse Gemini quiz response as JSON:",
         error.message
       );
       console.log("📋 [AI] Raw response that failed to parse:", result);
@@ -527,34 +534,42 @@ WAŻNE: Odpowiedz TYLKO w formacie JSON, bez dodatkowych komentarzy:
     return mockQuestions;
   }
 
-  // Check if Claude service is healthy
+  // Check if Gemini service is healthy
   async healthCheck() {
     try {
-      if (!this.anthropic) {
+      if (!this.model) {
         return {
           available: false,
-          service: "Claude (Anthropic)",
+          service: "Gemini (Google)",
           error: "API key not configured",
         };
       }
 
-      // Simple test request to Claude
-      const testResponse = await this.anthropic.messages.create({
-        model: "claude-3-haiku-20240307",
-        max_tokens: 5,
-        messages: [{ role: "user", content: "test" }],
+      // Simple test request to Gemini
+      const result = await this.model.generateContent({
+        contents: [
+          {
+            role: "user",
+            parts: [{ text: "test" }],
+          },
+        ],
+        generationConfig: {
+          maxOutputTokens: 5,
+        },
       });
+
+      await result.response;
 
       return {
         available: true,
-        service: "Claude (Anthropic)",
-        model: "claude-3-haiku-20240307",
+        service: "Gemini (Google)",
+        model: "gemini-pro",
         status: "healthy",
       };
     } catch (error) {
       return {
         available: false,
-        service: "Claude (Anthropic)",
+        service: "Gemini (Google)",
         error: error.message,
       };
     }

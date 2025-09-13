@@ -5,7 +5,7 @@ This guide covers deploying your ULeary application to production.
 ## 📋 Prerequisites
 
 1. GitHub repository with your code
-2. Anthropic Claude API key
+2. Google Gemini API key
 3. ElevenLabs API key (optional)
 
 ## 🎯 Quick Deploy (Free Option)
@@ -43,7 +43,7 @@ This guide covers deploying your ULeary application to production.
    ```bash
    NODE_ENV=production
    PORT=3001
-   ANTHROPIC_API_KEY=your_anthropic_api_key_here
+   GEMINI_API_KEY=your_gemini_api_key_here
    ELEVENLABS_API_KEY=your_elevenlabs_api_key_here
    FRONTEND_URL=https://your-app.vercel.app
    ```
@@ -73,7 +73,7 @@ VITE_API_URL=https://your-backend-domain.railway.app
 ```bash
 NODE_ENV=production
 PORT=3001
-ANTHROPIC_API_KEY=sk-ant-...
+GEMINI_API_KEY=your_gemini_api_key_here
 ELEVENLABS_API_KEY=...
 FRONTEND_URL=https://your-frontend-domain.vercel.app
 ```
@@ -108,7 +108,7 @@ FRONTEND_URL=https://your-frontend-domain.vercel.app
 
 2. **API Key Issues:**
 
-   - Verify Anthropic Claude API key is valid
+   - Verify Google Gemini API key is valid
    - Check ElevenLabs API key if using text-to-speech
 
 3. **Build Failures:**
