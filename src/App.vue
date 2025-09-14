@@ -67,7 +67,7 @@
         </v-card>
 
         <!-- Empty State -->
-        <v-card
+        <!-- <v-card
           v-if="!showMaterialDialog"
           class="mx-auto text-center"
           max-width="800"
@@ -84,7 +84,7 @@
               powyżej.
             </p>
           </v-card-text>
-        </v-card>
+        </v-card> -->
       </v-container>
     </v-main>
 
@@ -116,7 +116,7 @@
                 :color="selectedOption === 'upload' ? 'primary' : 'default'"
                 :variant="selectedOption === 'upload' ? 'tonal' : 'outlined'"
                 class="text-center cursor-pointer h-100"
-                @click="selectOption('upload')"
+                @click="triggerFileUpload"
                 hover
               >
                 <v-card-text class="pa-4">
@@ -294,14 +294,6 @@
 
         <!-- Action Buttons -->
         <v-card-actions class="pa-6">
-          <v-btn
-            variant="text"
-            @click="proceedWithoutMaterials"
-            class="text-none"
-          >
-            Kontynuuj bez materiałów
-          </v-btn>
-
           <v-spacer></v-spacer>
 
           <v-btn
@@ -568,17 +560,26 @@
 
           <v-spacer></v-spacer>
 
-          <v-btn
+          <!-- <v-btn
             color="primary"
             variant="flat"
             @click="downloadResult"
             prepend-icon="mdi-download"
           >
             Pobierz
-          </v-btn>
+          </v-btn> -->
         </v-card-actions>
       </v-card>
     </v-dialog>
+
+    <!-- Hidden file input for direct upload -->
+    <input
+      ref="hiddenFileInput"
+      type="file"
+      accept=".pdf,.docx,.doc,.dotx,.docm,.dotm,.pptx,.ppt,.ppsx,.potx,.pptm,.ppsm"
+      style="display: none"
+      @change="handleDirectFileUpload"
+    />
 
     <!-- Interactive Quiz Dialog -->
     <v-dialog v-model="showQuizDialog" max-width="900" persistent scrollable>
@@ -607,9 +608,6 @@
               >
                 {{ quizScore }} z {{ totalQuizAnswered }} poprawnych
               </v-chip>
-              <div class="text-caption">
-                {{ quizScore }} poprawnych z {{ totalQuizAnswered }} odpowiedzi
-              </div>
             </div>
           </v-card-title>
 
@@ -823,7 +821,7 @@
             </v-card>
 
             <!-- Questions List -->
-            <v-card variant="outlined">
+            <!-- <v-card variant="outlined">
               <v-card-title class="pa-4">
                 <v-icon class="mr-2">mdi-format-list-bulleted</v-icon>
                 Przegląd pytań
@@ -831,10 +829,7 @@
               <v-divider></v-divider>
               <v-list>
                 <v-list-item
-                  v-for="(question, index) in quizSession.questions.slice(
-                    0,
-                    quizResults.totalAnswered
-                  )"
+                  v-for="(question, index) in quizSession.questions"
                   :key="index"
                   @click="goToReviewQuestion(index)"
                   class="cursor-pointer"
@@ -842,18 +837,25 @@
                 >
                   <template #prepend>
                     <v-avatar
-                      :color="index < quizResults.score ? 'success' : 'error'"
+                      :color="getQuestionResultColor(index)"
                       size="32"
                     >
                       <v-icon size="18">
-                        {{
-                          index < quizResults.score ? "mdi-check" : "mdi-close"
-                        }}
+                        {{ getQuestionResultIcon(index) }}
                       </v-icon>
                     </v-avatar>
                   </template>
                   <v-list-item-title>
                     Pytanie {{ index + 1 }}
+                    <v-chip 
+                      v-if="index >= quizResults.totalAnswered"
+                      size="x-small"
+                      color="grey"
+                      variant="tonal"
+                      class="ml-2"
+                    >
+                      Nie odpowiedziano
+                    </v-chip>
                   </v-list-item-title>
                   <v-list-item-subtitle>
                     {{ question.question.substring(0, 80)
@@ -864,7 +866,7 @@
                   </template>
                 </v-list-item>
               </v-list>
-            </v-card>
+            </v-card> -->
           </v-card-text>
 
           <v-divider></v-divider>
@@ -881,7 +883,7 @@
 
             <v-spacer></v-spacer>
 
-            <v-btn
+            <!-- <v-btn
               color="primary"
               variant="outlined"
               @click="regenerateQuiz"
@@ -889,7 +891,7 @@
               class="mr-2"
             >
               Wygeneruj quiz ponownie
-            </v-btn>
+            </v-btn> -->
 
             <v-btn
               color="primary"
@@ -916,7 +918,7 @@
                 <span class="text-h5 font-weight-bold">Przegląd pytań</span>
                 <div class="text-caption text-grey-600">
                   Pytanie {{ reviewQuestionIndex + 1 }} z
-                  {{ quizResults.totalAnswered }}
+                  {{ quizSession.questions.length }}
                 </div>
               </div>
             </div>
@@ -987,14 +989,39 @@
             </v-card>
 
             <!-- Explanation -->
-            <v-card color="info" variant="tonal">
+            <v-card
+              :color="
+                reviewQuestionIndex >= quizResults.totalAnswered
+                  ? 'orange'
+                  : 'info'
+              "
+              variant="tonal"
+            >
               <v-card-text class="pa-4">
                 <div class="d-flex align-center mb-2">
-                  <v-icon class="mr-2">mdi-lightbulb</v-icon>
-                  <strong>Wyjaśnienie</strong>
+                  <v-icon class="mr-2">
+                    {{
+                      reviewQuestionIndex >= quizResults.totalAnswered
+                        ? "mdi-help-circle"
+                        : "mdi-lightbulb"
+                    }}
+                  </v-icon>
+                  <strong>
+                    {{
+                      reviewQuestionIndex >= quizResults.totalAnswered
+                        ? "Pytanie bez odpowiedzi"
+                        : "Wyjaśnienie"
+                    }}
+                  </strong>
                 </div>
                 <div class="text-body-1">
-                  {{ quizSession.questions[reviewQuestionIndex].explanation }}
+                  <span v-if="reviewQuestionIndex >= quizResults.totalAnswered">
+                    To pytanie nie zostało jeszcze zadane w quizie. Quiz został
+                    zakończony przed dotarciem do tego pytania.
+                  </span>
+                  <span v-else>
+                    {{ quizSession.questions[reviewQuestionIndex].explanation }}
+                  </span>
                 </div>
               </v-card-text>
             </v-card>
@@ -1016,7 +1043,7 @@
             <v-spacer></v-spacer>
 
             <v-chip variant="tonal" class="mx-2">
-              {{ reviewQuestionIndex + 1 }} / {{ quizResults.totalAnswered }}
+              {{ reviewQuestionIndex + 1 }} / {{ quizSession.questions.length }}
             </v-chip>
 
             <v-spacer></v-spacer>
@@ -1024,7 +1051,9 @@
             <v-btn
               variant="outlined"
               @click="nextReviewQuestion"
-              :disabled="reviewQuestionIndex === quizResults.totalAnswered - 1"
+              :disabled="
+                reviewQuestionIndex === quizSession.questions.length - 1
+              "
               append-icon="mdi-arrow-right"
             >
               Następne
@@ -1203,7 +1232,7 @@
     <!-- Quiz Page Selection Dialog -->
     <v-dialog
       v-model="showQuizPageSelectionDialog"
-      max-width="800"
+      max-width="1200"
       persistent
       scrollable
     >
@@ -1238,52 +1267,123 @@
             Wybrane strony: {{ quizSelectedPages.length }}/5
           </div>
 
-          <v-row dense>
-            <v-col
-              v-for="pageNum in quizFilePageCount"
-              :key="pageNum"
-              cols="6"
-              sm="4"
-              md="3"
-            >
-              <v-card
-                :color="
-                  quizSelectedPages.includes(pageNum) ? 'primary' : 'default'
-                "
-                :variant="
-                  quizSelectedPages.includes(pageNum) ? 'flat' : 'outlined'
-                "
-                class="text-center cursor-pointer"
-                @click="toggleQuizPageSelection(pageNum)"
-                hover
-              >
-                <v-card-text class="pa-3">
-                  <v-icon
-                    v-if="quizSelectedPages.includes(pageNum)"
-                    color="white"
-                    class="mb-1"
+          <v-row>
+            <!-- Page Selection Column -->
+            <v-col cols="12" md="6">
+              <v-row dense>
+                <v-col
+                  v-for="pageNum in quizFilePageCount"
+                  :key="pageNum"
+                  cols="6"
+                  sm="4"
+                  md="6"
+                >
+                  <v-card
+                    :color="
+                      quizSelectedPages.includes(pageNum)
+                        ? 'primary'
+                        : previewedPage === pageNum
+                        ? 'blue-grey-100'
+                        : 'default'
+                    "
+                    :variant="
+                      quizSelectedPages.includes(pageNum) ? 'flat' : 'outlined'
+                    "
+                    class="text-center cursor-pointer"
+                    @click="toggleQuizPageSelection(pageNum)"
+                    @mouseenter="loadPagePreview(pageNum)"
+                    hover
                   >
-                    mdi-check-circle
-                  </v-icon>
-                  <v-icon v-else class="mb-1">
-                    mdi-file-document-outline
-                  </v-icon>
-                  <div class="text-body-2 font-weight-medium">
-                    Strona {{ pageNum }}
+                    <v-card-text class="pa-3">
+                      <v-icon
+                        v-if="quizSelectedPages.includes(pageNum)"
+                        color="white"
+                        class="mb-1"
+                      >
+                        mdi-check-circle
+                      </v-icon>
+                      <v-icon v-else class="mb-1">
+                        mdi-file-document-outline
+                      </v-icon>
+                      <div class="text-body-2 font-weight-medium">
+                        Strona {{ pageNum }}
+                      </div>
+                    </v-card-text>
+                  </v-card>
+                </v-col>
+              </v-row>
+
+              <v-alert
+                v-if="quizSelectedPages.length === 0"
+                type="warning"
+                variant="tonal"
+                class="mt-4"
+              >
+                Wybierz przynajmniej jedną stronę aby kontynuować.
+              </v-alert>
+            </v-col>
+
+            <!-- Page Preview Column -->
+            <v-col cols="12" md="6">
+              <v-card variant="outlined" class="h-100">
+                <v-card-title class="d-flex align-center pa-4">
+                  <v-icon class="mr-2">mdi-eye</v-icon>
+                  Podgląd strony
+                  <v-spacer></v-spacer>
+                  <v-chip
+                    v-if="previewedPage"
+                    size="small"
+                    variant="tonal"
+                    color="primary"
+                  >
+                    Strona {{ previewedPage }}
+                  </v-chip>
+                </v-card-title>
+                <v-divider></v-divider>
+                <v-card-text
+                  class="pa-4"
+                  style="min-height: 400px; max-height: 500px; overflow-y: auto"
+                >
+                  <!-- Loading State -->
+                  <div v-if="loadingPagePreview" class="text-center py-8">
+                    <v-progress-circular
+                      indeterminate
+                      color="primary"
+                      class="mb-3"
+                    ></v-progress-circular>
+                    <div class="text-body-2">Ładowanie podglądu...</div>
+                  </div>
+
+                  <!-- Preview Content -->
+                  <div v-else-if="pagePreviewContent" class="preview-content">
+                    <v-chip
+                      size="small"
+                      variant="tonal"
+                      color="info"
+                      class="mb-3"
+                    >
+                      {{ pagePreviewContent.wordCount }} słów,
+                      {{ pagePreviewContent.charCount }} znaków
+                    </v-chip>
+                    <div
+                      class="text-body-2 preview-text"
+                      style="line-height: 1.6; white-space: pre-wrap"
+                    >
+                      {{ pagePreviewContent.content }}
+                    </div>
+                  </div>
+
+                  <!-- No Preview State -->
+                  <div v-else class="text-center py-8 text-grey-500">
+                    <v-icon size="48" class="mb-3">mdi-cursor-default</v-icon>
+                    <div class="text-body-2">
+                      Najedź na stronę aby zobaczyć podgląd
+                    </div>
                   </div>
                 </v-card-text>
               </v-card>
             </v-col>
           </v-row>
-
-          <v-alert
-            v-if="quizSelectedPages.length === 0"
-            type="warning"
-            variant="tonal"
-            class="mt-4"
-          >
-            Wybierz przynajmniej jedną stronę aby kontynuować.
-          </v-alert>
         </v-card-text>
 
         <v-divider></v-divider>
@@ -1371,6 +1471,12 @@ export default {
       quizSelectedPages: [],
       currentQuizFile: null,
       quizFilePageCount: 0,
+
+      // Page preview system
+      previewedPage: null,
+      pagePreviewContent: null,
+      loadingPagePreview: false,
+      pagePreviewCache: new Map(), // Cache previews to avoid repeated API calls
 
       // ElevenLabs Testing
       showElevenLabsTest: false,
@@ -1608,6 +1714,13 @@ export default {
       this.quizFilePageCount = pageCount;
       this.quizSelectedPages = [];
       this.showQuizPageSelectionDialog = true;
+
+      // Auto-load preview for first page
+      if (pageCount > 0) {
+        this.$nextTick(() => {
+          this.loadPagePreview(1);
+        });
+      }
     },
     toggleQuizPageSelection(pageNumber) {
       const index = this.quizSelectedPages.indexOf(pageNumber);
@@ -1687,9 +1800,80 @@ export default {
       this.quizSelectedPages = [];
       this.currentQuizFile = null;
       this.quizFilePageCount = 0;
+      // Clear preview data
+      this.previewedPage = null;
+      this.pagePreviewContent = null;
+      this.loadingPagePreview = false;
+      this.pagePreviewCache.clear();
+    },
+
+    // Page Preview Methods
+    async loadPagePreview(pageNumber) {
+      if (this.previewedPage === pageNumber) {
+        return; // Already showing this page
+      }
+
+      this.previewedPage = pageNumber;
+
+      // Check cache first
+      const cacheKey = `${this.currentQuizFile?.name}-${pageNumber}`;
+      if (this.pagePreviewCache.has(cacheKey)) {
+        this.pagePreviewContent = this.pagePreviewCache.get(cacheKey);
+        return;
+      }
+
+      if (!this.currentQuizFile) {
+        return;
+      }
+
+      this.loadingPagePreview = true;
+      this.pagePreviewContent = null;
+
+      try {
+        const response = await apiService.getPagePreview(
+          this.currentQuizFile,
+          pageNumber
+        );
+        if (response.success) {
+          const previewData = response.preview;
+          this.pagePreviewContent = previewData;
+          // Cache the preview
+          this.pagePreviewCache.set(cacheKey, previewData);
+        }
+      } catch (error) {
+        console.error("Error loading page preview:", error);
+        this.pagePreviewContent = {
+          content: "Błąd podczas ładowania podglądu strony.",
+          wordCount: 0,
+          charCount: 0,
+        };
+      } finally {
+        this.loadingPagePreview = false;
+      }
     },
 
     // File Upload Methods
+    triggerFileUpload() {
+      // Programmatically click the hidden file input
+      this.$refs.hiddenFileInput.click();
+    },
+    handleDirectFileUpload(event) {
+      const files = event.target.files;
+      if (files && files.length > 0) {
+        const file = files[0];
+        console.log("Direct file upload:", file.name);
+
+        // Set the selected option to upload and assign the file
+        this.selectedOption = "upload";
+        this.uploadedFiles = file;
+
+        // Automatically proceed with the upload
+        this.uploadAndProcessFile();
+
+        // Reset the file input for future uploads
+        event.target.value = "";
+      }
+    },
     handleFileChange(files) {
       console.log("File changed:", files);
       // The v-model should handle this automatically, but let's ensure it works
@@ -1971,12 +2155,6 @@ export default {
       this.showMaterialDialog = false;
       this.resetContent();
       this.selectedOption = null;
-    },
-    proceedWithoutMaterials() {
-      this.showNotification(
-        'Funkcja "Kontynuuj bez materiałów" zostanie wkrótce zaimplementowana',
-        "info"
-      );
     },
     async processContent() {
       if (this.isProcessing) return;
@@ -2361,6 +2539,21 @@ export default {
 
       return "default"; // Other options remain neutral
     },
+    getQuestionResultColor(index) {
+      if (index >= this.quizResults.totalAnswered) {
+        return "grey"; // Not answered
+      }
+      // For answered questions, use simple logic: first N questions correct, rest incorrect
+      // This is a simplified approach - in a real implementation you'd store individual answers
+      return index < this.quizResults.score ? "success" : "error";
+    },
+    getQuestionResultIcon(index) {
+      if (index >= this.quizResults.totalAnswered) {
+        return "mdi-help"; // Not answered
+      }
+      // For answered questions, use simple logic: first N questions correct, rest incorrect
+      return index < this.quizResults.score ? "mdi-check" : "mdi-close";
+    },
   },
 };
 </script>
@@ -2395,5 +2588,39 @@ export default {
 .audio-player-container audio:focus {
   outline: 2px solid rgb(var(--v-theme-primary));
   outline-offset: 2px;
+}
+
+.preview-content {
+  height: 100%;
+}
+
+.preview-text {
+  border-radius: 8px;
+  background-color: rgba(0, 0, 0, 0.02);
+  padding: 16px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  font-family: "Roboto", sans-serif;
+  text-align: justify;
+  hyphens: auto;
+  word-break: break-word;
+}
+
+/* Custom scrollbar for the preview card content */
+.v-card-text::-webkit-scrollbar {
+  width: 6px;
+}
+
+.v-card-text::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.05);
+  border-radius: 3px;
+}
+
+.v-card-text::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 3px;
+}
+
+.v-card-text::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.3);
 }
 </style>

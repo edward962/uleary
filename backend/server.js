@@ -201,6 +201,44 @@ app.get("/api/materials", async (req, res) => {
   }
 });
 
+// Get page preview for uploaded file
+app.post("/api/page-preview", upload.single("file"), async (req, res) => {
+  try {
+    const { pageNumber } = req.body;
+    const file = req.file;
+
+    if (!file) {
+      return res.status(400).json({
+        success: false,
+        error: "Nie przesłano pliku",
+      });
+    }
+
+    if (!pageNumber || pageNumber < 1) {
+      return res.status(400).json({
+        success: false,
+        error: "Nieprawidłowy numer strony",
+      });
+    }
+
+    const preview = await fileProcessor.getPagePreview(
+      file,
+      parseInt(pageNumber)
+    );
+
+    res.json({
+      success: true,
+      preview: preview,
+    });
+  } catch (error) {
+    console.error("Error getting page preview:", error);
+    res.status(500).json({
+      success: false,
+      error: error.message || "Błąd podczas pobierania podglądu strony",
+    });
+  }
+});
+
 // Generate summary for material
 app.post("/api/materials/:materialId/summary", async (req, res) => {
   try {

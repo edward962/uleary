@@ -278,6 +278,26 @@ class ApiService {
     }
   }
 
+  // Get page preview
+  async getPagePreview(file, pageNumber) {
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("pageNumber", pageNumber.toString());
+
+      const response = await this.api.post("/api/page-preview", formData, {
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
+        timeout: 30000, // 30 seconds timeout for preview
+      });
+
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
+  }
+
   // Get processing type label in Polish
   getProcessingTypeLabel(type) {
     const labels = {

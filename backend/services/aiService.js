@@ -11,7 +11,9 @@ class AIService {
     if (process.env.GEMINI_API_KEY) {
       try {
         this.genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-        this.model = this.genAI.getGenerativeModel({ model: "gemini-pro" });
+        this.model = this.genAI.getGenerativeModel({
+          model: "gemini-1.5-flash",
+        });
         console.log("✅ Gemini (Google) API initialized");
       } catch (error) {
         console.warn("⚠️ Gemini initialization failed:", error.message);
@@ -563,7 +565,7 @@ WAŻNE: Odpowiedz TYLKO w formacie JSON, bez dodatkowych komentarzy:
       return {
         available: true,
         service: "Gemini (Google)",
-        model: "gemini-pro",
+        model: "gemini-1.5-flash",
         status: "healthy",
       };
     } catch (error) {

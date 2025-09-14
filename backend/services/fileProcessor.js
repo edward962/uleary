@@ -204,6 +204,172 @@ class FileProcessor {
     }
   }
 
+  // Get preview content for a specific page
+  async getPagePreview(file, pageNumber) {
+    try {
+      const fullText = await this.extractText(file);
+      const pageCount = await this.estimatePageCount(file, fullText);
+
+      if (pageNumber < 1 || pageNumber > pageCount) {
+        throw new Error(
+          `Invalid page number: ${pageNumber}. Document has ${pageCount} pages.`
+        );
+      }
+
+      // Try to split text by common page break indicators first
+      let pages = this.splitTextIntoPages(fullText, pageCount);
+
+      if (pages.length >= pageNumber) {
+        let pageText = pages[pageNumber - 1];
+
+        // Clean up the text
+        pageText = pageText
+          .replace(/\s+/g, " ")
+          .replace(/\u00A0/g, " ") // Replace non-breaking spaces
+          .replace(/[\u200B-\u200D\uFEFF]/g, "") // Remove zero-width characters
+          .trim();
+
+        // Limit preview to first 2000 characters but try to break at sentence end
+        if (pageText.length > 2000) {
+          let truncated = pageText.substring(0, 2000);
+
+          // Try to find the last complete sentence
+          const lastSentenceEnd = Math.max(
+            truncated.lastIndexOf("."),
+            truncated.lastIndexOf("!"),
+            truncated.lastIndexOf("?")
+          );
+
+          if (lastSentenceEnd > 1000) {
+            // If we found a sentence ending after 1000 chars, use it
+            pageText = truncated.substring(0, lastSentenceEnd + 1) + "...";
+          } else {
+            // Otherwise, try to break at word boundary
+            const lastSpace = truncated.lastIndexOf(" ");
+            if (lastSpace > 1000) {
+              pageText = truncated.substring(0, lastSpace) + "...";
+            } else {
+              pageText = truncated + "...";
+            }
+          }
+        }
+
+        return {
+          pageNumber,
+          content: pageText,
+          wordCount: pageText.replace(/\.\.\.$/, "").split(" ").length,
+          charCount: pageText.length,
+        };
+      } else {
+        // Fallback to simple division if splitting failed
+        return this.getPagePreviewFallback(fullText, pageNumber, pageCount);
+      }
+    } catch (error) {
+      console.error("Error getting page preview:", error);
+      throw new Error(
+        `Błąd podczas pobierania podglądu strony: ${error.message}`
+      );
+    }
+  }
+
+  // Helper method to split text into logical pages
+  splitTextIntoPages(text, expectedPageCount) {
+    // Try different approaches to split text into pages
+
+    // Approach 1: Look for form feed characters (page breaks)
+    if (text.includes("\f")) {
+      const pages = text.split("\f").filter((page) => page.trim().length > 0);
+      if (pages.length > 1) {
+        return pages;
+      }
+    }
+
+    // Approach 2: Look for multiple consecutive line breaks that might indicate page breaks
+    const paragraphs = text.split(/\n\s*\n/);
+    if (paragraphs.length >= expectedPageCount) {
+      // Group paragraphs into pages
+      const pagesApprox = [];
+      const paragraphsPerPage = Math.ceil(
+        paragraphs.length / expectedPageCount
+      );
+
+      for (let i = 0; i < expectedPageCount; i++) {
+        const startIdx = i * paragraphsPerPage;
+        const endIdx = Math.min((i + 1) * paragraphsPerPage, paragraphs.length);
+        const pageContent = paragraphs.slice(startIdx, endIdx).join("\n\n");
+        if (pageContent.trim()) {
+          pagesApprox.push(pageContent);
+        }
+      }
+
+      if (pagesApprox.length > 0) {
+        return pagesApprox;
+      }
+    }
+
+    // Approach 3: Simple equal division with sentence boundary awareness
+    const sentences = text.split(/(?<=[.!?])\s+/);
+    if (sentences.length >= expectedPageCount) {
+      const sentencesPerPage = Math.ceil(sentences.length / expectedPageCount);
+      const pages = [];
+
+      for (let i = 0; i < expectedPageCount; i++) {
+        const startIdx = i * sentencesPerPage;
+        const endIdx = Math.min((i + 1) * sentencesPerPage, sentences.length);
+        const pageContent = sentences.slice(startIdx, endIdx).join(" ");
+        if (pageContent.trim()) {
+          pages.push(pageContent);
+        }
+      }
+
+      return pages;
+    }
+
+    // Fallback: simple character-based division
+    return this.simpleTextDivision(text, expectedPageCount);
+  }
+
+  // Fallback method for simple text division
+  simpleTextDivision(text, pageCount) {
+    const pages = [];
+    const textLength = text.length;
+    const avgPageLength = textLength / pageCount;
+
+    for (let i = 0; i < pageCount; i++) {
+      const startPos = Math.floor(i * avgPageLength);
+      const endPos = Math.floor((i + 1) * avgPageLength);
+      const pageText = text.substring(startPos, endPos);
+      pages.push(pageText);
+    }
+
+    return pages;
+  }
+
+  // Fallback preview method
+  getPagePreviewFallback(fullText, pageNumber, pageCount) {
+    const textLength = fullText.length;
+    const avgPageLength = textLength / pageCount;
+
+    const startPos = Math.floor((pageNumber - 1) * avgPageLength);
+    const endPos = Math.floor(pageNumber * avgPageLength);
+    let pageText = fullText.substring(startPos, endPos);
+
+    // Clean up the text and limit length for preview
+    pageText = pageText.replace(/\s+/g, " ").trim();
+
+    // Limit preview to first 1600 characters for better UX
+    if (pageText.length > 1600) {
+      pageText = pageText.substring(0, 1600) + "...";
+    }
+
+    return {
+      pageNumber,
+      content: pageText,
+      wordCount: pageText.split(" ").length,
+      charCount: pageText.length,
+    };
+  }
+
   // Extract text from specific pages (placeholder for future implementation)
   async extractTextFromPages(file, pageNumbers) {
     // In a real implementation, this would extract text from specific pages
